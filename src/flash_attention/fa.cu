@@ -1,7 +1,8 @@
-#include "fa.cuh"
+#include "fa_v2_mma.cuh"
 #include <torch/torch.h>
+#include "../common.hpp"
 
-
+namespace sion {
 template<int HEAD_DIM, int STAGE>
 void launch_flash_attn_mma_stages(torch::Tensor &Q, torch::Tensor &K,
                                   torch::Tensor &V, torch::Tensor &O,
@@ -53,4 +54,6 @@ void launch_flash_attn_mma_stages(torch::Tensor &Q, torch::Tensor &K,
     cuda_check(cudaDeviceSynchronize(), "Kernel execution failed (runtime error)");
 
     cuda_check(cudaGetLastError(), "CUDA post-sync error");
+}
+
 }

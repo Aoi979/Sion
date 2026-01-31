@@ -1,11 +1,8 @@
 #include "sgemm.cuh"
 #include <torch/torch.h>
-
+#include "../common.hpp"
 namespace sion {
 
-static inline void cuda_check(cudaError_t e, const char* msg) {
-    TORCH_CHECK(e == cudaSuccess, msg, ": ", cudaGetErrorString(e));
-}
 
 torch::Tensor sgemm(const torch::Tensor& A, const torch::Tensor& B,
                     float alpha, float beta) {
