@@ -28,7 +28,7 @@ SION_TEST(test_sgemm_basic){
     auto ref = sgemm_ref(A, B);
     auto val = sgemm_op(A, B);
     auto stats = sion::test::compare_tensor(ref, val, 1e-6);
-    sion::test::print_stats_md_file(stats, "sgemm_basic", A.numel(), 1e-6, "sgemm_report.md", true);
+    sion::test::print_stats_md_file(stats, "sgemm_basic", ref.numel(), 1e-6, "sgemm_report.md", true);
     SION_CHECK(sion::test::check_pass(stats, 1e-6));
 }
 

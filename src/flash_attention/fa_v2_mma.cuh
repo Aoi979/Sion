@@ -1,12 +1,15 @@
 #pragma once
 #include <cstdint>
+#include <sys/types.h>
 #include "../utils/utils.h"
 
-template<int const QKV_HEADS, int const HEAD_DIM, int const MMA_M,
+// bottleneck:  serious bank conflict in LDMATRIX
+//              line 314 ~ 317 non-fused floating point operations
+template<int const HEAD_DIM, int const MMA_M,
     int const MMA_N, int const MMA_K, int const STAGE, int const Bc = 64,
     int const WARP_NUM_SEQLEN_QS = 2, int const WARP_NUM_SEQLEN_K = 4>
-__global__ void v2_fwd_kernel(half *Q, half *K, half *V, half *O,
-                              int QKV_seqlen) {
+__global__ void flash_fwd_split_qk(half *Q, half *K, half *V, half *O,uint32_t heads,
+                              uint32_t QKV_seqlen) {
     // static assertions and constexpr calculations
     static_assert(MMA_M == 16 && MMA_N == 8 && MMA_K == 16);
     constexpr uint32_t Br = 64;
@@ -29,6 +32,7 @@ __global__ void v2_fwd_kernel(half *Q, half *K, half *V, half *O,
     static_assert(Bc % MMA_K == 0, "Bc must be divisible by MMA_K");
     constexpr uint32_t hidden_Bc_ITER = Bc / MMA_K;
 
+    uint32_t QKV_HEADS = heads;
     uint32_t Tc = QKV_seqlen / Bc;
 
     // constexpr uint32_t WARP_SIZE = 32;

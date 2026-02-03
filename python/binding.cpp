@@ -1,11 +1,9 @@
+#include <torch/extension.h>
 #include <pybind11/pybind11.h>
+#include <sion/sion.hpp>
+using namespace sion;
 
-namespace py = pybind11;
-int add(int a, int b) {
-    return a + b;
-}
-
-PYBIND11_MODULE(py_sion, m) {
-    m.doc() = "Simple test module";
-    m.def("add", &add, "A function that adds two numbers");
+PYBIND11_MODULE(pysion, m) {
+    m.doc() = "Sion, a High-Performance Deep Learning Operator Library";
+    m.def("sgemm", &sgemm, "A function that performs matrix multiplication");
 }
