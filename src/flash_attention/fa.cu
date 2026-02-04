@@ -1,11 +1,21 @@
-#include "fa_v2_mma.cuh"
+#include "ampere_flash_attn_mma16168_64.cuh"
+#include <concepts>
+#include <cstdint>
 #include <torch/torch.h>
 #include "../common.hpp"
 
 namespace sion {
-template<int HEAD_DIM, int STAGE>
+// template<int HEAD_DIM, int STAGE>
+struct FlashAttnMMA2DTiling {
+};
+struct FlashAttnMMA1DTiling {
+};
+template <typename Traits>
 void launch_flash_attn_mma_stages(const torch::Tensor &Q,const torch::Tensor &K,
                                   const torch::Tensor &V, torch::Tensor &O) {
+
+    constexpr auto HEAD_DIM = Traits::Args::HEAD_DIM;
+    constexpr auto STAGE = Traits::Args::STAGE;
     TORCH_CHECK(Q.is_cuda() && K.is_cuda() && V.is_cuda() && O.is_cuda(),
                 "All tensors must be CUDA tensors");
     TORCH_CHECK(Q.dtype() == torch::kHalf, "Q must be half");
@@ -20,6 +30,7 @@ void launch_flash_attn_mma_stages(const torch::Tensor &Q,const torch::Tensor &K,
     auto N = (uint32_t)Q.size(2);
     auto D = (uint32_t)Q.size(3);
 
+    if constexpr (std::same_as<typename Traits::strategy, FlashAttnMMA2DTiling>) {
     constexpr uint32_t warp_size = 32;
     constexpr uint32_t MMA_M = 16;
     constexpr uint32_t MMA_K = 16;
@@ -49,10 +60,10 @@ void launch_flash_attn_mma_stages(const torch::Tensor &Q,const torch::Tensor &K,
 
     cuda_check(cudaGetLastError(), "CUDA pre-launch error");
 
-    cudaFuncSetAttribute(flash_fwd_split_qk<HEAD_DIM, MMA_M, MMA_N, MMA_K, STAGE>,
+    cudaFuncSetAttribute(ampere_flash_attn_mma16168_64_2D_warp_tiling<HEAD_DIM, MMA_M, MMA_N, MMA_K, STAGE>,
                          cudaFuncAttributeMaxDynamicSharedMemorySize, 98304);
 
-    flash_fwd_split_qk<HEAD_DIM, MMA_M, MMA_N, MMA_K, STAGE>
+    ampere_flash_attn_mma16168_64_2D_warp_tiling<HEAD_DIM, MMA_M, MMA_N, MMA_K, STAGE>
             <<<grid, block, smem_size>>>(dQ, dK, dV, dO, H, N);
 
     cuda_check(cudaGetLastError(), "Kernel launch failed");
@@ -60,8 +71,14 @@ void launch_flash_attn_mma_stages(const torch::Tensor &Q,const torch::Tensor &K,
     cuda_check(cudaDeviceSynchronize(), "Kernel execution failed (runtime error)");
 
     cuda_check(cudaGetLastError(), "CUDA post-sync error");
+    } else if constexpr (std::same_as<Traits::strategy, FlashAttnMMA1DTiling>) {
+
+    }
 }
 
 template void launch_flash_attn_mma_stages<64,2>(const torch::Tensor &Q,const torch::Tensor &K,
+                                  const torch::Tensor &V, torch::Tensor &O);
+
+template void launch_flash_attn_mma_stages<128,2>(const torch::Tensor &Q,const torch::Tensor &K,
                                   const torch::Tensor &V, torch::Tensor &O);
 }

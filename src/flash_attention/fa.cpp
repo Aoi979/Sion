@@ -13,7 +13,17 @@ void launch_flash_attn_mma_stages(const torch::Tensor &Q, const torch::Tensor &K
         auto D = query.size(3);
         auto opt = query.options();
         auto O = torch::empty({B, H, N, D}, opt);
-        launch_flash_attn_mma_stages<64, 2>(query, key, value, O);
+        switch (D) {
+            case 64:
+                launch_flash_attn_mma_stages<64, 2>(query, key, value, O);
+                break;
+            case 128:
+                launch_flash_attn_mma_stages<128, 2>(query, key, value, O);
+                break;
+            default:
+                TORCH_CHECK(false, "flash_attention: unsupported head dimension ", D);
+        
+        }
         return O;
     };
 

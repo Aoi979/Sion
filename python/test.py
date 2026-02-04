@@ -3,7 +3,7 @@ import pysion
 
 print(pysion.__doc__)
 
-M, K, N = 2048, 2048, 2048
+M, K, N = 12288, 12288, 12288
 
 device = 'cuda'
 A = torch.randn(M, K, dtype=torch.float32, device=device)
