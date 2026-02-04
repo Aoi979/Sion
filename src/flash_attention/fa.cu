@@ -4,18 +4,46 @@
 #include <torch/torch.h>
 #include "../common.hpp"
 
-namespace sion {
-// template<int HEAD_DIM, int STAGE>
-struct FlashAttnMMA2DTiling {
+namespace sion::flash_attn {
+
+struct KernelScheduleWarpTiling2D {};
+struct KernelScheduleWarpTiling1D {};
+
+template<int Br_, int Bc_>
+struct TileShapeQK {
+  static constexpr int Br = Br_;
+  static constexpr int Bc = Bc_;
 };
-struct FlashAttnMMA1DTiling {
+
+template<int Stages_>
+struct MainloopScheduleStages {
+  static constexpr int Stages = Stages_;
 };
+
+template<uint32_t HeadDim_, uint32_t Stages_>
+struct Args {
+  static constexpr int kHeadDim = HeadDim_;
+  static constexpr int kStages = Stages_;
+};
+
+template<class Args_,
+         class TileShape_,
+         class KernelSchedule_,
+         class MainloopSchedule_>
+struct FlashAttnTraits {
+  using Args = Args_;
+  using TileShape = TileShape_;
+  using KernelSchedule = KernelSchedule_;
+  using MainloopSchedule = MainloopSchedule_;
+};
+
+
 template <typename Traits>
 void launch_flash_attn_mma_stages(const torch::Tensor &Q,const torch::Tensor &K,
                                   const torch::Tensor &V, torch::Tensor &O) {
 
-    constexpr auto HEAD_DIM = Traits::Args::HEAD_DIM;
-    constexpr auto STAGE = Traits::Args::STAGE;
+    constexpr auto HEAD_DIM = Traits::Args::kHeadDim;
+    constexpr auto STAGE = Traits::Args::kStages;
     TORCH_CHECK(Q.is_cuda() && K.is_cuda() && V.is_cuda() && O.is_cuda(),
                 "All tensors must be CUDA tensors");
     TORCH_CHECK(Q.dtype() == torch::kHalf, "Q must be half");
@@ -30,7 +58,7 @@ void launch_flash_attn_mma_stages(const torch::Tensor &Q,const torch::Tensor &K,
     auto N = (uint32_t)Q.size(2);
     auto D = (uint32_t)Q.size(3);
 
-    if constexpr (std::same_as<typename Traits::strategy, FlashAttnMMA2DTiling>) {
+//     if constexpr (std::same_as<typename Traits::KernelSchedule, KernelScheduleWarpTiling2D>) {
     constexpr uint32_t warp_size = 32;
     constexpr uint32_t MMA_M = 16;
     constexpr uint32_t MMA_K = 16;
@@ -71,14 +99,18 @@ void launch_flash_attn_mma_stages(const torch::Tensor &Q,const torch::Tensor &K,
     cuda_check(cudaDeviceSynchronize(), "Kernel execution failed (runtime error)");
 
     cuda_check(cudaGetLastError(), "CUDA post-sync error");
-    } else if constexpr (std::same_as<Traits::strategy, FlashAttnMMA1DTiling>) {
+//     } else if constexpr (std::same_as<Traits::KernelSchedule, KernelScheduleWarpTiling1D>) {
 
-    }
+//     }
 }
 
-template void launch_flash_attn_mma_stages<64,2>(const torch::Tensor &Q,const torch::Tensor &K,
-                                  const torch::Tensor &V, torch::Tensor &O);
+using FlashAttnTempConfig = FlashAttnTraits<
+                                        Args<128, 2>, 
+                                        TileShapeQK<64, 64>, 
+                                        KernelScheduleWarpTiling2D, 
+                                        MainloopScheduleStages<2>
+                                        >;
 
-template void launch_flash_attn_mma_stages<128,2>(const torch::Tensor &Q,const torch::Tensor &K,
+template void launch_flash_attn_mma_stages<FlashAttnTempConfig>(const torch::Tensor &Q,const torch::Tensor &K,
                                   const torch::Tensor &V, torch::Tensor &O);
 }
