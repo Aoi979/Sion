@@ -6,4 +6,5 @@ using namespace sion;
 PYBIND11_MODULE(pysion, m) {
     m.doc() = "Sion, a High-Performance Deep Learning Operator Library";
     m.def("sgemm", &sgemm, "A function that performs matrix multiplication");
+    m.def("flash_attention", &flash_attention, "A function that performs flash attention");
 }

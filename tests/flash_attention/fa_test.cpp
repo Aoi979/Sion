@@ -24,8 +24,8 @@ SION_TEST(test_SDPA_basic){
     torch::manual_seed(0);
     torch::Device device(torch::kCUDA);
 
-    constexpr int B = 5;
-    constexpr int H = 5;
+    constexpr int B = 16;
+    constexpr int H = 16;
     constexpr int D = 128;
     constexpr int STAGE = 2;
     int N = 1280;

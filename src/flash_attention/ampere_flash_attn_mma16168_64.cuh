@@ -610,8 +610,8 @@ __global__ void ampere_flash_attn_mma16168_64_1D_warp_tiling(half *Q, half *K, h
     uint32_t warp_id = tid / WARP_SIZE;
     uint32_t lane_id = tid % WARP_SIZE;
 
-    uint32_t warp_seqlen_qs_id = warp_id % WARP_NUM_SEQLEN_QS;
-    uint32_t warp_seqlen_k_id = warp_id / WARP_NUM_SEQLEN_QS;
+    uint32_t warp_seqlen_qs_id = warp_id;
+    uint32_t warp_seqlen_k_id = 0;
 
     uint32_t QKV_HEAD_SIZE = QKV_seqlen * HEAD_DIM;
     uint32_t BATCH_SIZE = QKV_HEADS * QKV_HEAD_SIZE;
@@ -980,14 +980,15 @@ __global__ void ampere_flash_attn_mma16168_64_1D_warp_tiling(half *Q, half *K, h
     for (int i = 0; i < WARP_ITER_SEQLEN_QS; i++) {
 #pragma unroll
         for (int j = 0; j < WARP_ITER_HEAD_DIM_V; j++) {
-            R_Q[0][0] = R_Final[i][j][0];
-            R_Q[1][0] = R_Final[i][j][1];
-            R_Q[0][1] = __shfl_sync((0xffffffff), R_Final[i][j][0], lane_id + 1, 4);
-            R_Q[0][2] = __shfl_sync((0xffffffff), R_Final[i][j][0], lane_id + 2, 4);
-            R_Q[0][3] = __shfl_sync((0xffffffff), R_Final[i][j][0], lane_id + 3, 4);
-            R_Q[1][1] = __shfl_sync((0xffffffff), R_Final[i][j][1], lane_id + 1, 4);
-            R_Q[1][2] = __shfl_sync((0xffffffff), R_Final[i][j][1], lane_id + 2, 4);
-            R_Q[1][3] = __shfl_sync((0xffffffff), R_Final[i][j][1], lane_id + 3, 4);
+            REG_SIZE_T R_T[2][4];
+            R_T[0][0] = R_Final[i][j][0];
+            R_T[1][0] = R_Final[i][j][1];
+            R_T[0][1] = __shfl_sync((0xffffffff), R_Final[i][j][0], lane_id + 1, 4);
+            R_T[0][2] = __shfl_sync((0xffffffff), R_Final[i][j][0], lane_id + 2, 4);
+            R_T[0][3] = __shfl_sync((0xffffffff), R_Final[i][j][0], lane_id + 3, 4);
+            R_T[1][1] = __shfl_sync((0xffffffff), R_Final[i][j][1], lane_id + 1, 4);
+            R_T[1][2] = __shfl_sync((0xffffffff), R_Final[i][j][1], lane_id + 2, 4);
+            R_T[1][3] = __shfl_sync((0xffffffff), R_Final[i][j][1], lane_id + 3, 4);
 
             if (lane_id % 4 == 0) {
                 uint32_t store_O_gmem_Br =
@@ -999,8 +1000,8 @@ __global__ void ampere_flash_attn_mma16168_64_1D_warp_tiling(half *Q, half *K, h
                         O_gmem_offset + (store_O_gmem_Br + 0) * HEAD_DIM + store_O_gmem_d;
                 uint32_t store_gmem_O_address_1 =
                         O_gmem_offset + (store_O_gmem_Br + 8) * HEAD_DIM + store_O_gmem_d;
-                LDST128BITS(O[store_gmem_O_address_0]) = LDST128BITS(R_Q[0][0]);
-                LDST128BITS(O[store_gmem_O_address_1]) = LDST128BITS(R_Q[1][0]);
+                LDST128BITS(O[store_gmem_O_address_0]) = LDST128BITS(R_T[0][0]);
+                LDST128BITS(O[store_gmem_O_address_1]) = LDST128BITS(R_T[1][0]);
             }
         }
     }
