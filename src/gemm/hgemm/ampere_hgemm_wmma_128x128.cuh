@@ -1,13 +1,14 @@
 #include <cuda_fp16.h>
 #include <mma.h>
 #include <cstdint>
-
+using namespace nvcuda;
 // ampere_hgemm_128x128
 // cudaFuncSetAttribute(this, cudaFuncAttributeMaxDynamicSharedMemorySize, 37888);
 // 4 warps per block
+// using cp.async, no need for additional threads to mask latency, just fill the tensor core.
 // balanced workload
 template<int const BM = 128, int const BN = 128, int const bK = 32, int const WM = 64, int const WN = 64>
-__global__ void ampere_hgemm_128x128(half *A, half *B, half *C, int M, int N, int K) {
+__global__ void ampere_hgemm_wmma_128x128(const half *A, const half *B, half *C, int M, int N, int K) {
     uint32_t warp_id = threadIdx.x / 32;
 
     constexpr uint32_t A_PADDING = 8;
