@@ -1,18 +1,18 @@
 import torch
-import pysion
+import pysion as sion
 
-print(pysion.__doc__)
+print(sion.__doc__)
 
-M, K, N = 12288, 12288, 12288
+M, K, N = 4, 4, 4
 
 device = 'cuda'
 A = torch.randn(M, K, dtype=torch.float32, device=device)
 B = torch.randn(K, N, dtype=torch.float32, device=device)
 
-alpha = 1.0
-beta = 0.0  
+alpha = 7.0
+beta = 4.0  
 
-C = pysion.sgemm(A, B, alpha, beta)
+C = sion.sgemm(A, B, alpha, beta)
 
 print("A @ B using libpysion.sgemm on CUDA:")
 print(C)

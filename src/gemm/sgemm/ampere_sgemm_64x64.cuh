@@ -3,6 +3,7 @@
 #define FETCH_CONST_FLOAT4(pointer)                                            \
   (reinterpret_cast<const float4 *>(&(pointer))[0])
 
+// General version, therefore sacrificing vectorized memory access optimization
 __global__ void ampere_sgemm_64x64(int M, int N, int K, float alpha,
                                    float const *A, float const *B, float beta,
                                    float *C) {
@@ -276,6 +277,7 @@ __global__ void ampere_sgemm_64x64(int M, int N, int K, float alpha,
   // epilogue
   {
     float *final_C = &C[warp_row * kWM * N + warp_col * kWN];
+#pragma unroll
     for (uint32_t a = 0; a < kWM_ITER; a++) {
       for (uint32_t b = 0; b < kWN_ITER; b++) {
         for (uint32_t reg_idx_a = 0; reg_idx_a < kTM; reg_idx_a++) {
