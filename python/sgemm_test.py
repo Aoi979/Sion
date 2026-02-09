@@ -1,5 +1,5 @@
 import torch
-import pysion as sion
+import sion
 
 print(sion.__doc__)
 

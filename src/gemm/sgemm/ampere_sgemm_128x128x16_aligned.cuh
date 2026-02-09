@@ -6,8 +6,8 @@
 template<int const BM = 128, int const BN = 128, int const TM = 4, int const TN = 4, int const WM = 32, int const WN =
         64, int const bK = 16, int const WM_ITER = 2, int const WN_ITER = 2>
 __global__ void ampere_sgemm_128x128x16_aligned(int M, int N, int K, float alpha,
-                                                     float const *A, float const *B,
-                                                     float beta, float *C) {
+                                                     float const * __restrict__ A, float const * __restrict__ B,
+                                                     float beta, float * __restrict__ C) {
     __shared__ float a_smem[2][bK * BM];
     __shared__ float b_smem[2][bK * BN];
     constexpr uint32_t VEC_SIZE = 4;

@@ -39,8 +39,7 @@ SION_TEST(test_SDPA_basic){
     auto ref = SDPA_ref(Q, K, V);
     auto val = SDPA_op(Q, K, V);
     auto stats = sion::test::compare_tensor(ref, val);
-    sion::test::print_stats_md_file(stats, "SDPA_basic", ref.numel(), 1e-2, "SDPA_report.md", true);
-    SION_CHECK(sion::test::check_pass(stats, 1e-2));
+    sion::test::add_record("SDPA_basic", ref.numel(), stats, 1e-2);
 }
 
 int main(){
@@ -51,5 +50,6 @@ int main(){
         fn();
     }
     std::cout << "[Sion] all tests passed\n";
+    sion::test::write_report("SDPA_report.md");
     return 0;
 }

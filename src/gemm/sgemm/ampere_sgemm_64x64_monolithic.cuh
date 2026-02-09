@@ -5,8 +5,8 @@
 
 // General version, therefore sacrificing vectorized memory access optimization
 __global__ void ampere_sgemm_64x64(int M, int N, int K, float alpha,
-                                   float const *A, float const *B, float beta,
-                                   float *C) {
+                                   float const* __restrict__ A, float const* __restrict__ B, float beta,
+                                   float * __restrict__ C) {
   constexpr uint32_t WARP_SIZE = 32;
 
   constexpr uint32_t kBM = 64;

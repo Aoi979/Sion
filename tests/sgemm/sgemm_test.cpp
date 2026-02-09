@@ -9,16 +9,6 @@ torch::Tensor sgemm_ref(const torch::Tensor& A, const torch::Tensor& B) {
     return C.to(A.dtype());
 }
 
-torch::Tensor dummy_sgemm(const torch::Tensor& A, const torch::Tensor& B) {
-    TORCH_CHECK(A.dim() == 2, "A must be 2D");
-    TORCH_CHECK(B.dim() == 2, "B must be 2D");
-    int64_t M = A.size(0);
-    int64_t K1 = A.size(1);
-    int64_t K2 = B.size(0);
-    int64_t N = B.size(1);
-    TORCH_CHECK(K1 == K2, "Inner dimensions must match for matrix multiplication");
-    return torch::zeros({M, N}, A.options());
-}
 
 torch::Tensor sgemm_op(const torch::Tensor& A, const torch::Tensor& B){
     const int64_t M = A.size(0);
@@ -42,7 +32,7 @@ SION_TEST(test_sgemm_basic){
     auto ref = sgemm_ref(A, B);
     auto val = sgemm_op(A, B);
     auto stats = sion::test::compare_tensor(ref, val, 1e-6);
-    sion::test::print_stats_md_file(stats, "sgemm_basic", ref.numel(), 1e-6, "sgemm_report.md", true);
+    sion::test::add_record("sgemm_basic", ref.numel(), stats, 1e-6);
 }
 
 SION_TEST(test_sgemm_unaligned0){
@@ -60,7 +50,7 @@ SION_TEST(test_sgemm_unaligned0){
     auto ref = sgemm_ref(A, B);
     auto val = sgemm_op(A, B);
     auto stats = sion::test::compare_tensor(ref, val, 1e-6);
-    sion::test::print_stats_md_file(stats, "sgemm_next", ref.numel(), 1e-6, "sgemm_report.md", false);
+    sion::test::add_record("sgemm_unaligned0", ref.numel(), stats, 1e-6);
 }
 
 SION_TEST(test_sgemm_unaligned1){
@@ -78,7 +68,7 @@ SION_TEST(test_sgemm_unaligned1){
     auto ref = sgemm_ref(A, B);
     auto val = sgemm_op(A, B);
     auto stats = sion::test::compare_tensor(ref, val, 1e-6);
-    sion::test::print_stats_md_file(stats, "sgemm_final", ref.numel(), 1e-6, "sgemm_report.md", false);
+    sion::test::add_record("sgemm_unaligned1", ref.numel(), stats, 1e-6);
 }
 
 int main(){
@@ -89,5 +79,6 @@ int main(){
         fn();
     }
     std::cout << "[Sion] all tests completed, please check the report\n";
+    sion::test::write_report("sgemm_report.md");
     return 0;
 }

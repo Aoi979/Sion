@@ -14,4 +14,5 @@ target_link_libraries(pysion PRIVATE sion torch pybind11::module ${TORCH_PYTHON_
 set_target_properties(pysion PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     PREFIX ""
+    OUTPUT_NAME "sion"
 )

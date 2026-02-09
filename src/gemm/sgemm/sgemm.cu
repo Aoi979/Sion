@@ -1,6 +1,7 @@
+#include <cstdint>
 #include <torch/torch.h>
 #include "../../common.hpp"
-#include "ampere_sgemm_64x64.cuh"
+#include "ampere_sgemm_64x64_modular.cuh"
 namespace sion {
 
 torch::Tensor sgemm(const torch::Tensor &A, const torch::Tensor &B, float alpha,
@@ -11,13 +12,13 @@ torch::Tensor sgemm(const torch::Tensor &A, const torch::Tensor &B, float alpha,
   TORCH_CHECK(B.dtype() == torch::kFloat32, "B must be float32");
   TORCH_CHECK(A.dim() == 2 && B.dim() == 2, "A and B must be 2D");
 
-  int M = (int)A.size(0);
-  int K = (int)A.size(1);
-  int N = (int)B.size(1);
+  uint32_t M = (uint32_t)A.size(0);
+  uint32_t K = (uint32_t)A.size(1);
+  uint32_t N = (uint32_t)B.size(1);
   TORCH_CHECK(B.size(0) == K, "B.size(0) must match A.size(1)");
-  constexpr int BM = 64;
-  constexpr int BN = 64;
-  constexpr int BK = 8;
+  constexpr uint32_t BM = 64;
+  constexpr uint32_t BN = 64;
+  constexpr uint32_t BK = 8;
   auto C = torch::empty({M, N}, A.options());
   const float *ptrA = A.data_ptr<float>();
   const float *ptrB = B.data_ptr<float>();
@@ -27,8 +28,8 @@ torch::Tensor sgemm(const torch::Tensor &A, const torch::Tensor &B, float alpha,
   dim3 block(64);
 
   cuda_check(cudaGetLastError(), "CUDA pre-launch error");
-
-  ampere_sgemm_64x64<<<grid, block>>>(M, N, K, alpha, ptrA, ptrB, beta, ptrC);
+  
+  ampere_sgemm_64x64_nn<<<grid, block>>>(M, N, K, alpha, ptrA, ptrB, beta, ptrC);
 
   cuda_check(cudaGetLastError(), "Kernel launch failed");
 

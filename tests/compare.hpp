@@ -5,7 +5,6 @@
 #include <vector>
 #include <algorithm>
 #include <fstream>
-
 namespace sion::test {
 
 struct ErrorStats {
@@ -20,11 +19,21 @@ struct ErrorStats {
     double quantile_50 = 0.0;
     double quantile_90 = 0.0;
     double quantile_99 = 0.0;
-
-    // 张量概览
     std::string tensor_preview_ref;
     std::string tensor_preview_val;
 };
+
+struct TestRecord {
+    std::string name;
+    int64_t n;
+    bool pass;
+    ErrorStats stats;
+};
+
+inline std::vector<TestRecord>& report_buffer() {
+    static std::vector<TestRecord> buffer;
+    return buffer;
+}
 
 inline std::string tensor_preview(const torch::Tensor& t, int64_t edgeitems=3) {
     std::ostringstream ss;
@@ -70,8 +79,9 @@ inline std::string tensor_preview(const torch::Tensor& t, int64_t edgeitems=3) {
     return ss.str();
 }
 
-inline bool is_subnormal(double v) { return v != 0.0 && std::abs(v) < std::numeric_limits<float>::min(); }
-
+inline bool is_subnormal(double v) {
+    return v != 0.0 && std::abs(v) < std::numeric_limits<float>::min();
+}
 
 inline ErrorStats compare_tensor(const torch::Tensor& ref, const torch::Tensor& val, double eps=1e-6) {
     TORCH_CHECK(ref.sizes() == val.sizes(), "Tensor size mismatch");
@@ -80,12 +90,12 @@ inline ErrorStats compare_tensor(const torch::Tensor& ref, const torch::Tensor& 
     auto val_flat = val.flatten().to(torch::kCPU).to(torch::kFloat64);
 
     ErrorStats stats;
-
     stats.tensor_preview_ref = tensor_preview(ref);
     stats.tensor_preview_val = tensor_preview(val);
 
     std::vector<double> abs_errors;
     auto n = ref_flat.numel();
+
     for(int64_t i=0;i<n;i++){
         double r = ref_flat[i].item<double>();
         double v = val_flat[i].item<double>();
@@ -114,6 +124,7 @@ inline ErrorStats compare_tensor(const torch::Tensor& ref, const torch::Tensor& 
         if(idx >= n) idx = n-1;
         return abs_errors[idx];
     };
+
     stats.quantile_50 = q(0.5);
     stats.quantile_90 = q(0.9);
     stats.quantile_99 = q(0.99);
@@ -121,71 +132,60 @@ inline ErrorStats compare_tensor(const torch::Tensor& ref, const torch::Tensor& 
     return stats;
 }
 
-
 inline bool check_pass(const ErrorStats& stats, double tol=1e-3){
     return stats.max_abs <= tol && stats.nan_count == 0 && stats.inf_count == 0;
 }
 
-inline void print_stats(const ErrorStats& stats, const std::string& name, int64_t n){
-    std::cout << "[TEST] " << name << " n=" << n
-              << " max_abs=" << stats.max_abs
-              << " mean_abs=" << stats.mean_abs
-              << " max_rel=" << stats.max_rel
-              << " mean_rel=" << stats.mean_rel
-              << " rms=" << stats.rms_error
-              << " nan=" << stats.nan_count
-              << " inf=" << stats.inf_count
-              << " subnormal=" << stats.subnormal_count
-              << " q50=" << stats.quantile_50
-              << " q90=" << stats.quantile_90
-              << " q99=" << stats.quantile_99
-              << std::endl;
-
-    std::cout << "Ref Tensor Preview:\n" << stats.tensor_preview_ref << std::endl;
-    std::cout << "Val Tensor Preview:\n" << stats.tensor_preview_val << std::endl;
+inline void add_record(const std::string& name, int64_t n, const ErrorStats& stats, double tol=1e-3){
+    report_buffer().push_back({
+        name,
+        n,
+        check_pass(stats, tol),
+        stats
+    });
 }
 
-inline void print_stats_md_file(const ErrorStats& stats, const std::string& test_name, int64_t n,
-                                double tol=1e-3, const std::string& filename="sion_report.md", bool header=false)
-{
-    std::ofstream out(filename, header ? std::ios::trunc : std::ios::app);
+inline void write_report(const std::string& filename="sion_report.md"){
+    std::ofstream out(filename, std::ios::trunc);
     if(!out) return;
 
-    // 表格头
-    if(header){
-        out << "| Test Name | n | max_abs | mean_abs | max_rel | mean_rel | rms | NaN | Inf | Subnormal | q50 | q90 | q99 | Pass |\n";
-        out << "|:---------|:--:|--------:|---------:|--------:|---------:|----:|:--:|:--:|----------:|:--:|:--:|:--:|:----:|\n";
+    out << "| Pass | Test Name | n | max_abs | mean_abs | max_rel | mean_rel | rms | NaN | Inf | Subnormal | q50 | q90 | q99 |\n";
+    out << "|:----:|:---------|:--:|--------:|---------:|--------:|---------:|----:|:--:|:--:|----------:|----:|----:|----:|\n";
+
+    for(auto& r : report_buffer()){
+        out << "| "
+            << (r.pass ? "PASS" : "FAIL")
+            << " | " << r.name
+            << " | " << r.n
+            << " | " << r.stats.max_abs
+            << " | " << r.stats.mean_abs
+            << " | " << r.stats.max_rel
+            << " | " << r.stats.mean_rel
+            << " | " << r.stats.rms_error
+            << " | " << r.stats.nan_count
+            << " | " << r.stats.inf_count
+            << " | " << r.stats.subnormal_count
+            << " | " << r.stats.quantile_50
+            << " | " << r.stats.quantile_90
+            << " | " << r.stats.quantile_99
+            << " |\n";
     }
 
-    // 统计信息表格
-    out << "| " << test_name
-        << " | " << n
-        << " | " << stats.max_abs
-        << " | " << stats.mean_abs
-        << " | " << stats.max_rel
-        << " | " << stats.mean_rel
-        << " | " << stats.rms_error
-        << " | " << stats.nan_count
-        << " | " << stats.inf_count
-        << " | " << stats.subnormal_count
-        << " | " << stats.quantile_50
-        << " | " << stats.quantile_90
-        << " | " << stats.quantile_99
-        << " | " << (check_pass(stats, tol) ? "PASS" : "FAIL")
-        << " |\n\n";
+    out << "\n---\n\n";
 
-    out << "> **Ref Tensor Preview**\n>\n";
-    out << "> ```text\n";
-    std::istringstream ref_ss(stats.tensor_preview_ref);
-    std::string line;
-    while(std::getline(ref_ss, line)) out << "> " << line << "\n";
-    out << "> ```\n>\n";
+    for(auto& r : report_buffer()){
+        out << "## " << r.name << "\n\n";
 
-    out << "> **Val Tensor Preview**\n>\n";
-    out << "> ```text\n";
-    std::istringstream val_ss(stats.tensor_preview_val);
-    while(std::getline(val_ss, line)) out << "> " << line << "\n";
-    out << "> ```\n\n";
+        out << "### Ref Tensor Preview\n\n";
+        out << "```text\n"
+            << r.stats.tensor_preview_ref
+            << "\n```\n\n";
+
+        out << "### Val Tensor Preview\n\n";
+        out << "```text\n"
+            << r.stats.tensor_preview_val
+            << "\n```\n\n";
+    }
 }
 
-} // namespace sion::test
+}
