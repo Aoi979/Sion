@@ -1,7 +1,5 @@
 #include <cstdint>
-#define FETCH_FLOAT4(pointer) (reinterpret_cast<float4 *>(&(pointer))[0])
-#define FETCH_CONST_FLOAT4(pointer) (reinterpret_cast<const float4 *>(&(pointer))[0])
-
+#include <utils/macro.h>
 // This is a specialized version that requires shape alignment and outperforms cublas.
 template<int const BM = 128, int const BN = 128, int const TM = 4, int const TN = 4, int const WM = 32, int const WN =
         64, int const bK = 16, int const WM_ITER = 2, int const WN_ITER = 2>

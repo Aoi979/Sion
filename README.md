@@ -1,13 +1,37 @@
 # Sion
-Sion 是一个 高性能 CUDA AI 算子库，专注深度学习核心算子的 GPU 实现。追求极致性能与数值稳定性。
-> 名称来源于游戏 Eden* 中的角色 Sion
-> 
-## 已支持
+
+Sion is a high-performance CUDA AI operator library, focusing on GPU implementations of core deep learning operators. It aims for extreme performance and numerical stability.
+
+> The name is inspired by the character Sion from the game *Eden*.
+
+> 中文版 [README_CN.md](README_CN.md)
+## Supported
+
 - **SGEMM** (**SIMT**)
-## 部分支持
-- **flash_attention** (**Ampere**) 
-   
-  目前仅支持 FP16, 形状必须对齐, 不支持 **mask**等特性。
 
+## Partially Supported
 
-  
+- **Flash Attention** (**Ampere**)  
+  Currently only supports FP16. Shapes must be aligned. Features like **mask** are not supported.
+
+## Requirements
+
+- **C++20**
+- **CUDA 11.8+**
+- **Libtorch** (PyTorch C++ API)
+
+## Build Instructions
+
+```bash
+git clone https://github.com/Aoi979/Sion.git
+cd sion
+mkdir build && cd build
+cmake -G Ninja -DTORCH_ROOT=/path/to/libtorch ..
+ninja
+```
+To enable Python bindings:
+```bash
+cmake -G Ninja -DBUILD_PYTHON_BINDING=ON -DTORCH_ROOT=/path/to/libtorch ..
+```
+## License
+Sion is released under the MIT License. See [LICENSE](LICENSE) for details.

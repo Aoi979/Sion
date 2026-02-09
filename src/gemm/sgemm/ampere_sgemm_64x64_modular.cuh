@@ -1,9 +1,5 @@
 #include <cstdint>
-#define FETCH_FLOAT4(pointer) (reinterpret_cast<float4 *>(&(pointer))[0])
-#define FETCH_CONST_FLOAT4(pointer)                                            \
-  (reinterpret_cast<const float4 *>(&(pointer))[0])
-
-
+#include <utils/macro.h>
 namespace felix {
 
 struct Sgemm64x64Config {
@@ -39,7 +35,7 @@ struct ThreadInfo {
   uint32_t warp_id;
   uint32_t lane_id;
   uint32_t warp_row;
-  uint32_t warp_col;
+  static constexpr uint32_t warp_col = 0;
   uint32_t thread_row;
   uint32_t thread_col;
 
@@ -48,7 +44,6 @@ struct ThreadInfo {
     warp_id = tid / Config::WARP_SIZE;
     lane_id = tid % Config::WARP_SIZE;
     warp_row = warp_id / Config::warps_per_row;
-    warp_col = warp_id % Config::warps_per_row;
     thread_row = lane_id / (Config::warpMMATileN / Config::kTN);
     thread_col = lane_id % (Config::warpMMATileN / Config::kTN);
   }
@@ -181,13 +176,13 @@ struct WarpMma {
 
     uint32_t frag_idx = k_inner & 1u;
 #pragma unroll
-    for (int a = 0; a < static_cast<int>(Config::kWM_ITER); a++) {
+    for (uint32_t a = 0; a < Config::kWM_ITER; a++) {
       FETCH_FLOAT4(aFragment[frag_idx][a * Config::kTM]) = FETCH_CONST_FLOAT4(
           aSmemWarpTile[thread.thread_row * Config::kTM +
                         k_inner * Config::kBM + a * Config::warpMMATileM]);
     }
 #pragma unroll
-    for (int b = 0; b < static_cast<int>(Config::kWN_ITER); b++) {
+    for (uint32_t b = 0; b < Config::kWN_ITER; b++) {
       FETCH_FLOAT4(bFragment[frag_idx][b * Config::kTN]) = FETCH_CONST_FLOAT4(
           bSmemWarpTile[thread.thread_col * Config::kTN +
                         k_inner * Config::kBN + b * Config::warpMMATileN]);

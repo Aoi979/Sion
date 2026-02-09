@@ -1,7 +1,5 @@
 #include <cstdint>
-#define FETCH_FLOAT4(pointer) (reinterpret_cast<float4 *>(&(pointer))[0])
-#define FETCH_CONST_FLOAT4(pointer)                                            \
-  (reinterpret_cast<const float4 *>(&(pointer))[0])
+#include <utils/macro.h>
 
 // General version, therefore sacrificing vectorized memory access optimization
 __global__ void ampere_sgemm_64x64(int M, int N, int K, float alpha,
