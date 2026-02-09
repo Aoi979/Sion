@@ -1,5 +1,5 @@
 #include <torch/torch.h>
-#include "../common.hpp"
+#include "../../common.hpp"
 #include "ampere_hgemm_wmma_128x128.cuh"
 namespace sion {
     torch::Tensor hgemm(const torch::Tensor& A,
