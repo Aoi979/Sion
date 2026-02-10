@@ -2,7 +2,7 @@
 
 Sion is a high-performance CUDA AI operator library, focusing on GPU implementations of core deep learning operators. It aims for extreme performance and numerical stability.
 
-> The name is inspired by the character Sion from the game *Eden*.
+> The name is inspired by the character Sion from the game *Eden**.
 
 > 中文版 [README_CN.md](README_CN.md)
 ## Supported
@@ -17,7 +17,7 @@ Sion is a high-performance CUDA AI operator library, focusing on GPU implementat
 ## Requirements
 
 - **C++20**
-- **CUDA 11.8+**
+- **CUDA 13.1+**
 - **Libtorch** (PyTorch C++ API)
 
 ## Build Instructions

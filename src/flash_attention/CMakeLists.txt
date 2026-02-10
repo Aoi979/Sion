@@ -1,4 +1,4 @@
 target_sources(sion PRIVATE
-    fa.cu
-    fa.cpp
+    flash_attn.cu
+    flash_attn.cpp
 )

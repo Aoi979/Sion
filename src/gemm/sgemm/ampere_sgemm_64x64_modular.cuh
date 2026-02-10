@@ -29,8 +29,7 @@ struct Sgemm64x64Config {
   static constexpr uint32_t warpMMATileN = kWN / kWN_ITER;
 };
 
-template <typename Config>
-struct ThreadInfo {
+template <typename Config> struct ThreadInfo {
   uint32_t tid;
   uint32_t warp_id;
   uint32_t lane_id;
@@ -49,20 +48,17 @@ struct ThreadInfo {
   }
 };
 
-template <typename Config>
-struct BlockOffset {
+template <typename Config> struct BlockOffset {
   uint32_t m;
   uint32_t n;
 };
 
-template <typename Config>
-struct SharedStorage {
+template <typename Config> struct SharedStorage {
   float a[Config::kStages][Config::kBK * Config::kBM];
   float b[Config::kStages][Config::kBK * Config::kBN];
 };
 
-template <typename Config>
-struct GmemIteratorA {
+template <typename Config> struct GmemIteratorA {
   float const *A_block;
   uint32_t M;
   uint32_t K;
@@ -99,16 +95,14 @@ struct GmemIteratorA {
                         uint32_t stage) const {
 #pragma unroll
     for (uint32_t i = 0; i < Config::load_a_iters; i++) {
-      uint32_t load_smem_a = load_smem_a_col * Config::kBM +
-                             load_smem_a_row +
+      uint32_t load_smem_a = load_smem_a_col * Config::kBM + load_smem_a_row +
                              i * Config::load_smem_A_row_stride;
       shared.a[stage][load_smem_a] = ldg[i];
     }
   }
 };
 
-template <typename Config>
-struct GmemIteratorB {
+template <typename Config> struct GmemIteratorB {
   float const *B_block;
   uint32_t N;
   uint32_t K;
@@ -145,16 +139,14 @@ struct GmemIteratorB {
 #pragma unroll
     for (uint32_t i = 0; i < Config::load_b_iters; i++) {
       uint32_t load_smem_b =
-          (load_smem_b_row + i * Config::load_smem_B_row_stride) *
-              Config::kBN +
+          (load_smem_b_row + i * Config::load_smem_B_row_stride) * Config::kBN +
           load_smem_b_col;
       shared.b[stage][load_smem_b] = ldg[i];
     }
   }
 };
 
-template <typename Config>
-struct WarpMma {
+template <typename Config> struct WarpMma {
   ThreadInfo<Config> thread;
   float aFragment[Config::kStages][Config::kWM_ITER * Config::kTM];
   float bFragment[Config::kStages][Config::kWN_ITER * Config::kTN];
@@ -171,8 +163,10 @@ struct WarpMma {
 
   __device__ void load_fragments(SharedStorage<Config> const &shared,
                                  uint32_t stage, uint32_t k_inner) {
-    float const *aSmemWarpTile = &shared.a[stage][thread.warp_row * Config::kWM];
-    float const *bSmemWarpTile = &shared.b[stage][thread.warp_col * Config::kWN];
+    float const *aSmemWarpTile =
+        &shared.a[stage][thread.warp_row * Config::kWM];
+    float const *bSmemWarpTile =
+        &shared.b[stage][thread.warp_col * Config::kWN];
 
     uint32_t frag_idx = k_inner & 1u;
 #pragma unroll
@@ -198,12 +192,11 @@ struct WarpMma {
         for (uint32_t reg_idx_a = 0; reg_idx_a < Config::kTM; reg_idx_a++) {
 #pragma unroll
           for (uint32_t reg_idx_b = 0; reg_idx_b < Config::kTN; reg_idx_b++) {
-            uint32_t acc_idx = (a * Config::kTM + reg_idx_a) *
-                                   Config::kWN_ITER * Config::kTN +
-                               b * Config::kTN + reg_idx_b;
-            accum[acc_idx] +=
-                aFragment[frag_idx][a * Config::kTM + reg_idx_a] *
-                bFragment[frag_idx][b * Config::kTN + reg_idx_b];
+            uint32_t acc_idx =
+                (a * Config::kTM + reg_idx_a) * Config::kWN_ITER * Config::kTN +
+                b * Config::kTN + reg_idx_b;
+            accum[acc_idx] += aFragment[frag_idx][a * Config::kTM + reg_idx_a] *
+                              bFragment[frag_idx][b * Config::kTN + reg_idx_b];
           }
         }
       }
@@ -211,8 +204,7 @@ struct WarpMma {
   }
 };
 
-template <typename Config>
-struct MmaPipeline {
+template <typename Config> struct MmaPipeline {
   SharedStorage<Config> &shared;
   GmemIteratorA<Config> iterA;
   GmemIteratorB<Config> iterB;
@@ -268,21 +260,18 @@ struct MmaPipeline {
   }
 };
 
-template <typename Config>
-struct Epilogue {
+template <typename Config> struct Epilogue {
   ThreadInfo<Config> thread;
 
   __device__ Epilogue(ThreadInfo<Config> const &thread_) : thread(thread_) {}
 
-  __device__ void store(float *C_block, uint32_t M, uint32_t N,
-                        BlockOffset<Config> const &block, float alpha,
-                        float beta,
-                        float const (&accum)[Config::kWM_ITER *
-                                             Config::kWN_ITER * Config::kTM *
-                                             Config::kTN]) const {
-    float *final_C =
-        &C_block[thread.warp_row * Config::kWM * N +
-                 thread.warp_col * Config::kWN];
+  __device__ void
+  store(float *C_block, uint32_t M, uint32_t N,
+        BlockOffset<Config> const &block, float alpha, float beta,
+        float const (&accum)[Config::kWM_ITER * Config::kWN_ITER * Config::kTM *
+                             Config::kTN]) const {
+    float *final_C = &C_block[thread.warp_row * Config::kWM * N +
+                              thread.warp_col * Config::kWN];
 #pragma unroll
     for (uint32_t a = 0; a < Config::kWM_ITER; a++) {
 #pragma unroll
@@ -290,23 +279,19 @@ struct Epilogue {
 #pragma unroll
         for (uint32_t reg_idx_a = 0; reg_idx_a < Config::kTM; reg_idx_a++) {
 #pragma unroll
-          for (uint32_t reg_idx_b = 0; reg_idx_b < Config::kTN;
-               reg_idx_b++) {
-            uint32_t row_offset =
-                a * Config::warpMMATileM + thread.thread_row * Config::kTM +
-                reg_idx_a;
-            uint32_t col_offset =
-                b * Config::warpMMATileN + thread.thread_col * Config::kTN +
-                reg_idx_b;
-            uint32_t global_row = block.m + thread.warp_row * Config::kWM +
-                                  row_offset;
-            uint32_t global_col = block.n + thread.warp_col * Config::kWN +
-                                  col_offset;
+          for (uint32_t reg_idx_b = 0; reg_idx_b < Config::kTN; reg_idx_b++) {
+            uint32_t row_offset = a * Config::warpMMATileM +
+                                  thread.thread_row * Config::kTM + reg_idx_a;
+            uint32_t col_offset = b * Config::warpMMATileN +
+                                  thread.thread_col * Config::kTN + reg_idx_b;
+            uint32_t global_row =
+                block.m + thread.warp_row * Config::kWM + row_offset;
+            uint32_t global_col =
+                block.n + thread.warp_col * Config::kWN + col_offset;
             if (global_row < M && global_col < N) {
-              uint32_t acc_idx =
-                  (a * Config::kTM + reg_idx_a) * Config::kWN_ITER *
-                      Config::kTN +
-                  b * Config::kTN + reg_idx_b;
+              uint32_t acc_idx = (a * Config::kTM + reg_idx_a) *
+                                     Config::kWN_ITER * Config::kTN +
+                                 b * Config::kTN + reg_idx_b;
               final_C[row_offset * N + col_offset] =
                   alpha * accum[acc_idx] +
                   beta * final_C[row_offset * N + col_offset];
@@ -320,10 +305,10 @@ struct Epilogue {
 
 } // namespace felix
 
-
-__global__ void ampere_sgemm_64x64_nn(
-    uint32_t M, uint32_t N, uint32_t K, float alpha, float const *__restrict__ A,
-    float const *__restrict__ B, float beta, float *__restrict__ C) {
+__global__ void ampere_sgemm_64x64_nn(uint32_t M, uint32_t N, uint32_t K,
+                                      float alpha, float const *__restrict__ A,
+                                      float const *__restrict__ B, float beta,
+                                      float *__restrict__ C) {
   using Config = felix::Sgemm64x64Config;
   using ThreadInfo = felix::ThreadInfo<Config>;
   using BlockOffset = felix::BlockOffset<Config>;
@@ -335,8 +320,7 @@ __global__ void ampere_sgemm_64x64_nn(
   using Epilogue = felix::Epilogue<Config>;
 
   ThreadInfo thread;
-  BlockOffset block{blockIdx.y * Config::kBM,
-                    blockIdx.x * Config::kBN};
+  BlockOffset block{blockIdx.y * Config::kBM, blockIdx.x * Config::kBN};
 
   float const *A_block = A + block.m * K;
   float const *B_block = B + block.n;
@@ -348,8 +332,7 @@ __global__ void ampere_sgemm_64x64_nn(
   WarpMma mma(thread);
   MmaPipeline pipeline(shared, iterA, iterB, mma);
 
-  uint32_t k_iter =
-      (K + Config::kBK - 1) / Config::kBK;
+  uint32_t k_iter = (K + Config::kBK - 1) / Config::kBK;
   pipeline.run(k_iter);
 
   Epilogue epilogue(thread);
