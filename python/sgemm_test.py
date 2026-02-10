@@ -14,7 +14,7 @@ beta = 0.3
 
 C = sion.sgemm(A, B, alpha, beta)
 
-print("A @ B using libpysion.sgemm on CUDA:")
+print("A @ B using sion.sgemm on CUDA:")
 print(C)
 
 C_ref = alpha * torch.matmul(A, B)  # beta*C0 = 0

@@ -1,7 +1,9 @@
 #include <cstdint>
 #include <utils/macro.h>
 namespace felix {
-
+// TODO:
+// shared store bank conflict -> swizzle
+// epilogue uncoalesced
 struct Sgemm64x64Config {
   static constexpr uint32_t WARP_SIZE = 32;
 
