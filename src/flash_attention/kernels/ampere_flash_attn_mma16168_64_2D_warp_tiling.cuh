@@ -1,7 +1,7 @@
 #pragma once
 #include <cstdint>
-#include "../utils/utils.h"
-#include "../utils/swizzle.hpp"
+#include <utils/utils.h>
+#include <utils/swizzle.hpp>
 #include <type_traits>
 template <typename>
 inline constexpr bool dependent_false_v = false;

@@ -8,6 +8,3 @@ target_compile_options(sion PRIVATE
 target_include_directories(sion PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
 )
-target_include_directories(sion PRIVATE
-        ${CMAKE_SOURCE_DIR}/include
-)

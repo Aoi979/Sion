@@ -49,7 +49,7 @@ int main(){
         std::cout << "  - " << name << std::endl;
         fn();
     }
-    std::cout << "[Sion] all tests passed\n";
+    std::cout << "[Sion] all tests completed, please check the report\n";
     sion::test::write_report("SDPA_report.md");
     return 0;
 }

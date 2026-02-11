@@ -1,4 +1,4 @@
-#include "ampere_flash_attn_mma16168_64_1D_warp_tiling.cuh"
+#include "kernels/ampere_flash_attn_mma16168_64_1D_warp_tiling.cuh"
 #include <felix/felix.hpp>
 
 namespace felix {
