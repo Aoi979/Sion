@@ -5,7 +5,7 @@ message(STATUS "pybind11 include dir: ${pybind11_INCLUDE_DIRS}")
 message(STATUS "pybind11 version: ${pybind11_VERSION}")
 add_library(pysion SHARED binding.cpp)
 
-target_include_directories(pysion PRIVATE ${CMAKE_SOURCE_DIR}/include)
+target_include_directories(pysion PRIVATE ${CMAKE_SOURCE_DIR}/include ${Python3_INCLUDE_DIRS})
 
 message(STATUS "BINDING: Torch libraries found: ${TORCH_LIBRARIES}")
 

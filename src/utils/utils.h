@@ -1,4 +1,3 @@
-#include <algorithm>
 #include <cuda_bf16.h>
 #include <cuda_fp16.h>
 #include <cuda_fp8.h>
@@ -6,11 +5,7 @@
 #include <float.h>
 #include <mma.h>
 #include <stdint.h>
-#include <stdio.h>
 #include <stdlib.h>
-#include <torch/extension.h>
-#include <torch/types.h>
-#include <vector>
 using namespace nvcuda;
 
 #define WARP_SIZE 32
