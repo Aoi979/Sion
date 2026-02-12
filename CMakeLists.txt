@@ -11,9 +11,6 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 add_library(sion SHARED)
 
-find_package(Torch REQUIRED)
-target_link_libraries(sion PUBLIC torch)
-
 target_sources(sion PUBLIC
     FILE_SET HEADERS
     BASE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -23,16 +20,21 @@ target_sources(sion PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include/felix/status.hpp
 )
 
+option(SION_ENABLE_TORCH_BINDINGS
+    "Enable PyTorch bindings"
+    ON)
+
+if(SION_ENABLE_TORCH_BINDINGS)
+    find_package(Torch REQUIRED)
+    target_link_libraries(sion PUBLIC torch)
+endif()
+
 option(BUILD_PYTHON_BINDING "Build Python binding" OFF)
 
 if(BUILD_PYTHON_BINDING)
     find_package(Python3 COMPONENTS Development REQUIRED)
     add_subdirectory(python)
 endif()
-
-option(SION_ENABLE_TORCH_BINDINGS
-    "Enable PyTorch bindings"
-    ON)
 
 add_subdirectory(tests)
 add_subdirectory(bench)
