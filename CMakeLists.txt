@@ -13,7 +13,8 @@ add_library(sion SHARED)
 
 target_sources(sion PUBLIC
     FILE_SET HEADERS
-    BASE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/include
+    BASE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/include 
+              ${CMAKE_CURRENT_SOURCE_DIR}/third_party/cutlass/include
     FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/include/sion/sion.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/include/felix/felix.hpp
