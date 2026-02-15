@@ -3,7 +3,7 @@ Sion 是一个 高性能 CUDA AI 算子库，专注深度学习核心算子的 G
 > ⚠️ 当前处于早期开发阶段，功能较少，性能暂不保证。 
 
 
-> 名称来源于游戏 Eden* 中的角色 Sion
+💡 名称来源于游戏 Eden* 中的角色 Sion
 
 
 ## 已支持
@@ -41,6 +41,7 @@ ninja install
 ```
 
 ## 使用方法
+### C++
 在 CMake 项目中：
 ```CMake
 find_package(Sion REQUIRED)
@@ -50,6 +51,34 @@ target_link_libraries(your_target
         Sion::sion
 )
 ```
+### Python
+编译时开启 `-DBUILD_PYTHON_BINDING=ON`。
 
+示例：
+
+```pythonimport torch
+import sion
+
+A = torch.randn(128, 256, device="cuda")
+B = torch.randn(256, 512, device="cuda")
+
+C = sion.sgemm(A, B)
+```
+## 贡献
+
+Sion 目前是一个小型的实验性项目。
+
+如果你对 GPU Kernel 设计或高性能算子实现感兴趣，欢迎参与贡献。
+
+实现方式可以是：
+
+- 纯手写 CUDA Kernel
+
+- 基于 CuTe 的实现
+
+请避免直接封装现有高层算子库（如 cuBLAS、cuDNN 等）。
+
+本项目的目标是从底层实现算子。
+欢迎提出想法、讨论与改进建议。
 ## 许可证
 Sion 采用 MIT 许可证发布。详情请参见 [LICENSE](LICENSE) 文件。

@@ -1,4 +1,5 @@
-#include "kernels/ampere_sgemm_64x64_modular.cuh"
+#include "kernels/ampere_sgemm_64x64_align1.cuh"
+#include "kernels/cute_sgemm.cuh"
 #include <felix/felix.hpp>
 namespace felix {
 FelixStatus ampere_sgemm_64x64_nn_kernel_launch(uint32_t M, uint32_t N, uint32_t K,
