@@ -107,7 +107,7 @@ __global__ void ampere_flash_attn_mma16168_64_1D_warp_tiling(half *Q, half *K, h
 
     constexpr uint32_t Q_tile_size = Br * HEAD_DIM;
     constexpr uint32_t KV_tile_size = Bc * HEAD_DIM;
-    constexpr uint32_t S_tile_size = Br * Bc;
+    // constexpr uint32_t S_tile_size = Br * Bc;
 
     auto Q_tile_smem = sram;
     auto K_tile_smem = Q_tile_smem + Q_tile_size;

@@ -1,0 +1,1 @@
+target_sources(sion PRIVATE gemm.cpp sgemm/sgemm.cpp hgemm/hgemm.cpp)

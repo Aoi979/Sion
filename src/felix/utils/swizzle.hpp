@@ -1,4 +1,5 @@
 #include <type_traits>
+#include <cuda_runtime.h>
 
 template <int B, int M, int S>
 struct Swizzle
@@ -13,7 +14,7 @@ struct Swizzle
 
     /// Swizzle a linear element index
     template <typename Index>
-    static constexpr Index apply(Index i)
+    __host__ __device__ static constexpr Index apply(Index i)
     {
         static_assert(std::is_integral<Index>::value,
                       "Index must be an integral type");

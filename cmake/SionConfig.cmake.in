@@ -1,7 +1,9 @@
 @PACKAGE_INIT@
 
 include(CMakeFindDependencyMacro)
-find_dependency(Torch)
+find_dependency(Torch REQUIRED)
+find_dependency(Felix REQUIRED)
+
 
 include("${CMAKE_CURRENT_LIST_DIR}/SionTargets.cmake")
 

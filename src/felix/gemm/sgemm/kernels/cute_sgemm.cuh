@@ -1,7 +1,3 @@
-#include <cute/algorithm/axpby.hpp>
-#include <cute/algorithm/copy.hpp>
-#include <cute/algorithm/gemm.hpp>
-#include <cute/numeric/integral_constant.hpp>
 #include <cute/tensor.hpp>
 
 template <class ProblemShape, class CtaTiler, class TA, class AStride,
