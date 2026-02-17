@@ -1,10 +1,11 @@
 #include "../common.hpp"
+#include <cstdint>
 #include <felix/felix.hpp>
 
 namespace sion {
 
 namespace detail {
-template <int HEAD_DIM, int STAGE>
+template <int HEAD_DIM>
 void launch_flash_attn_mma_stages_1D(const torch::Tensor &Q,
                                      const torch::Tensor &K,
                                      const torch::Tensor &V, torch::Tensor &O) {
@@ -24,9 +25,16 @@ void launch_flash_attn_mma_stages_1D(const torch::Tensor &Q,
   at::cuda::CUDAStream current_stream = at::cuda::getCurrentCUDAStream();
   cudaStream_t stream = current_stream.stream();
 
-  auto status =
-      felix::ampere_flash_attn_mma16168_64_1D_warp_tiling_kernel_launch<
-          HEAD_DIM, STAGE>(dQ, dK, dV, dO, Q.size(1), Q.size(2), stream);
+  auto batch_size = Q.size(0);
+  auto heads = Q.size(1);
+  auto QKV_seqlen = Q.size(2);
+  // TODO: support tail tiles when seq_len is not divisible by Br (Br=64).
+  TORCH_CHECK((QKV_seqlen % 64) == 0,
+              "flash_attention: seq_len must be divisible by 64 for the "
+              "current kernel; tail handling is not implemented yet");
+  auto status = felix::ampere_flash_attn_launch<HEAD_DIM, 64>(
+      dQ, dK, dV, dO, heads, batch_size, QKV_seqlen, stream,
+      "ampere_flash_attn_mma16168_64_1D_warp_tiling");
 
   TORCH_CHECK(status.ok(),
               "flash_attention: kernel launch failed: ", status.str());
@@ -46,10 +54,10 @@ torch::Tensor flash_attention(const torch::Tensor &query,
 
   switch (D) {
   case 64:
-    detail::launch_flash_attn_mma_stages_1D<64, 2>(query, key, value, O);
+    detail::launch_flash_attn_mma_stages_1D<64>(query, key, value, O);
     break;
   case 128:
-    detail::launch_flash_attn_mma_stages_1D<128, 2>(query, key, value, O);
+    detail::launch_flash_attn_mma_stages_1D<128>(query, key, value, O);
     break;
   default:
     TORCH_CHECK(false, "flash_attention: unsupported head dimension ", D);

@@ -1,3 +1,3 @@
 target_sources(felix PRIVATE
-    flash_attn.cu
+    ampere_flash_attn_mma16168_64_1D_warp_tiling_kernel_launch.cu
 )

@@ -1,3 +1,3 @@
 target_sources(felix PRIVATE
-    sgemm.cu
+    ampere_sgemm_64x64_nn_kernel_launch.cu
 )

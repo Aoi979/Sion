@@ -32,7 +32,7 @@ torch::Tensor sgemm(const torch::Tensor &A, const torch::Tensor &B, float alpha,
   at::cuda::CUDAStream current_stream = at::cuda::getCurrentCUDAStream();
   cudaStream_t stream = current_stream.stream();
   
-  auto status = felix::ampere_sgemm_64x64_nn_kernel_launch(
+  auto status = felix::ampere_sgemm_launch(
       M, N, K, alpha, ptrA, ptrB, beta, ptrC, stream);
 
   TORCH_CHECK(status.ok(), "SGEMM launch failed: ", status.str());
