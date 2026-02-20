@@ -16,24 +16,16 @@ torch::Tensor sgemm(const torch::Tensor &A, const torch::Tensor &B, float alpha,
 
   TORCH_CHECK(B.size(0) == K, "B.size(0) must match A.size(1)");
 
-  constexpr uint32_t BM = 64;
-  constexpr uint32_t BN = 64;
-  constexpr uint32_t BK = 8;
-
   auto C = torch::empty({M, N}, A.options());
 
   const float *ptrA = A.data_ptr<float>();
   const float *ptrB = B.data_ptr<float>();
   float *ptrC = C.data_ptr<float>();
 
-  dim3 grid((N + BN - 1) / BN, (M + BM - 1) / BM);
-  dim3 block(64);
+  cudaStream_t stream = at::cuda::getCurrentCUDAStream();
 
-  at::cuda::CUDAStream current_stream = at::cuda::getCurrentCUDAStream();
-  cudaStream_t stream = current_stream.stream();
-  
-  auto status = felix::ampere_sgemm_launch(
-      M, N, K, alpha, ptrA, ptrB, beta, ptrC, stream);
+  auto status = felix::ampere_sgemm_launch(M, N, K, alpha, ptrA, ptrB, beta,
+                                           ptrC, stream);
 
   TORCH_CHECK(status.ok(), "SGEMM launch failed: ", status.str());
 
