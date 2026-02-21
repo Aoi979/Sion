@@ -1,3 +1,4 @@
+#include "cute/config.hpp"
 #include <cute/tensor.hpp>
 
 template <class ProblemShape, class CtaTiler, class AStride, class ASmemLayout,
@@ -17,11 +18,10 @@ __global__ static __launch_bounds__(decltype(size(
                                                BThreadLayout tB,
                                                float *__restrict__ C,
                                                CStride dC, CSmemLayout,
-                                               CThreadLayout tC, float alpha,
+                                               CThreadLayout, float alpha,
                                                float beta) {
   using namespace cute;
 
-  // Preconditions
   CUTE_STATIC_ASSERT_V(rank(shape_MNK) == Int<3>{}); // (M, N, K)
   CUTE_STATIC_ASSERT_V(rank(cta_tiler) == Int<3>{}); // (BLK_M, BLK_N, BLK_K)
 
@@ -30,7 +30,6 @@ __global__ static __launch_bounds__(decltype(size(
   static_assert(is_static<CThreadLayout>::value);
 
   CUTE_STATIC_ASSERT_V(size(tA) == size(tB)); // NumThreads
-  CUTE_STATIC_ASSERT_V(size(tC) == size(tA)); // NumThreads
 
   CUTE_STATIC_ASSERT_V(size<0>(cta_tiler) % size<0>(tA) ==
                        Int<0>{}); // BLK_M / THR_M
@@ -40,10 +39,6 @@ __global__ static __launch_bounds__(decltype(size(
                        Int<0>{}); // BLK_N / THR_N
   CUTE_STATIC_ASSERT_V(size<2>(cta_tiler) % size<1>(tB) ==
                        Int<0>{}); // BLK_K / THR_K
-  CUTE_STATIC_ASSERT_V(size<0>(cta_tiler) % size<0>(tC) ==
-                       Int<0>{}); // BLK_M / THR_M
-  CUTE_STATIC_ASSERT_V(size<1>(cta_tiler) % size<1>(tC) ==
-                       Int<0>{}); // BLK_N / THR_N
 
   static_assert(is_static<ASmemLayout>::value);
   static_assert(is_static<BSmemLayout>::value);
@@ -63,11 +58,6 @@ __global__ static __launch_bounds__(decltype(size(
   CUTE_STATIC_ASSERT_V(
       congruent(select<0, 1>(shape_MNK), dC)); // dC strides for shape MN
 
-  //
-  // Full and Tiled Tensors
-  //
-
-  // Represent the full tensors
   Tensor mA =
       make_tensor(make_gmem_ptr(A), select<0, 2>(shape_MNK), dA); // (M,K)
   Tensor mB =
@@ -75,7 +65,6 @@ __global__ static __launch_bounds__(decltype(size(
   Tensor mC =
       make_tensor(make_gmem_ptr(C), select<0, 1>(shape_MNK), dC); // (M,N)
 
-  // Get the appropriate blocks for this thread block
   auto cta_coord = make_coord(blockIdx.x, blockIdx.y, _); // (m,n,k)
   Tensor gA = local_tile(mA, cta_tiler, cta_coord,
                          Step<_1, X, _1>{}); // (BLK_M,BLK_K,k)
@@ -84,18 +73,10 @@ __global__ static __launch_bounds__(decltype(size(
   Tensor gC =
       local_tile(mC, cta_tiler, cta_coord, Step<_1, _1, X>{}); // (BLK_M,BLK_N)
 
-  // Shared memory buffers
   __shared__ float smemA[cosize_v<ASmemLayout>];
   __shared__ float smemB[cosize_v<BSmemLayout>];
   Tensor sA = make_tensor(make_smem_ptr(smemA), sA_layout); // (BLK_M,BLK_K)
   Tensor sB = make_tensor(make_smem_ptr(smemB), sB_layout); // (BLK_N,BLK_K)
-
-  //
-  // Partition the copying of A and B tiles across the threads
-  //
-
-  // TUTORIAL: Example of simple raked partitioning of ThreadLayouts tA|tB over
-  // data A|B tiles
 
   Tensor tAgA = local_partition(gA, tA, threadIdx.x); // (THR_M,THR_K,k)
   Tensor tAsA = local_partition(sA, tA, threadIdx.x); // (THR_M,THR_K)
@@ -108,88 +89,50 @@ __global__ static __launch_bounds__(decltype(size(
   CUTE_STATIC_ASSERT_V(size<0>(tBgB) == size<0>(tBsB)); // THR_N
   CUTE_STATIC_ASSERT_V(size<1>(tBgB) == size<1>(tBsB)); // THR_K
 
-  //
-  // Define A/B partitioning and C accumulators
-  //
+  auto warp_id = threadIdx.x / 32;
+  auto lane_id = threadIdx.x % 32;
 
-  // TUTORIAL: Example of partitioning via projections of a ThreadLayout tC
+  auto warp_tiler = make_shape(Int<32>{}, Int<64>{});
+  auto iter_tiler = make_shape(Int<16>{}, Int<32>{});
+  auto lane_tiler = make_shape(Int<4>{}, Int<4>{});
+  auto iter_coord = make_coord(_, _);
+  auto lane_coord = make_coord(lane_id / 8, lane_id % 8);
+  auto warp_coord = make_coord(warp_id / 2, warp_id % 2);
 
-  // Partition sA (BLK_M, BLK_K) by the rows of tC
-  Tensor tCsA =
-      local_partition(sA, tC, threadIdx.x, Step<_1, X>{}); // (THR_M,BLK_K)
-  // Partition sB (BLK_N, BLK_K) by the cols of tC
-  Tensor tCsB =
-      local_partition(sB, tC, threadIdx.x, Step<X, _1>{}); // (THR_N,BLK_K)
-  // Partition gC (M,N) by the tile of tC
-  Tensor tCgC =
-      local_partition(gC, tC, threadIdx.x, Step<_1, _1>{}); // (THR_M,THR_N)
+  Tensor wC = local_tile(gC, warp_tiler, warp_coord);     //(32, 64)
+  Tensor wIterC = local_tile(wC, iter_tiler, iter_coord); //(16, 32, 2, 2)
+  Tensor lC = local_tile(wIterC, lane_tiler, lane_coord); //(4, 4, 2, 2)
+  auto rC = make_tensor_like(lC);
 
-  // Allocate the accumulators -- same shape/layout as the partitioned data
-  Tensor tCrC = make_tensor_like(tCgC); // (THR_M,THR_N)
+  Tensor wA = local_tile(sA, warp_tiler, warp_coord, Step<_1, X>{});
+  Tensor wIterA =
+      local_tile(wA, iter_tiler, iter_coord, Step<_1, X>{}); // ((_16),_2,_16)
+  Tensor lA = local_tile(wIterA, lane_tiler, lane_coord,
+                         Step<_1, X>{}); // ((_4),_2,_16)
 
-  CUTE_STATIC_ASSERT_V(size<0>(tCrC) == size<0>(tCgC)); // THR_M
-  CUTE_STATIC_ASSERT_V(size<0>(tCrC) == size<0>(tCsA)); // THR_M
-  CUTE_STATIC_ASSERT_V(size<1>(tCrC) == size<1>(tCgC)); // THR_N
-  CUTE_STATIC_ASSERT_V(size<1>(tCrC) == size<0>(tCsB)); // THR_N
-  CUTE_STATIC_ASSERT_V(size<1>(tCsA) == size<1>(tCsB)); // BLK_K
-
-  // Clear the accumulators
-  clear(tCrC);
-
-
-  // TUTORIAL: Example of a simple mainloop that read tiles of data into shared
-  // memory,
-  //           and then computes on those tiles.
-  //   copy(.) operates on the global and shared memory via the tA|tB
-  //   partitioning gemm(.) operates on the shared and register memory via the
-  //   tC partitioning
-
+  Tensor wB = local_tile(sB, warp_tiler, warp_coord, Step<X, _1>{});
+  Tensor wIterB =
+      local_tile(wB, iter_tiler, iter_coord, Step<X, _1>{}); // ((_16),_2,_16)
+  Tensor lB = local_tile(wIterB, lane_tiler, lane_coord,
+                         Step<X, _1>{}); // ((_4),_2,_16)
   auto K_TILE_MAX = size<2>(tAgA);
 
   for (int k_tile = 0; k_tile < K_TILE_MAX; ++k_tile) {
-    // Copy gmem to smem with tA|tB thread-partitioned tensors
     copy(tAgA(_, _, k_tile), tAsA); // A   (THR_M,THR_K) -> (THR_M,THR_K)
     copy(tBgB(_, _, k_tile), tBsB); // B   (THR_N,THR_K) -> (THR_N,THR_K)
 
-    // TUTORIAL: The above call to copy(tAgA(_,_,k_tile), tAsA) is equivalent to
-    //   Tensor tAgAk = tAgA(_,_,k_tile);
-    //   CUTE_UNROLL
-    //   for (int i = 0; i < size(tAsA); ++i) {
-    //     tAsA(i) = tAgAk(i);
-    //   }
-
-    cp_async_fence();   // Label the end of (potential) cp.async instructions
-    cp_async_wait<0>(); // Sync on all (potential) cp.async instructions
-    __syncthreads();    // Wait for all threads to write to smem
-
-    // Compute gemm on tC thread-partitioned smem
-    gemm(tCsA, tCsB, tCrC); // (THR_M,THR_N) += (THR_M,BLK_K) * (THR_N,BLK_K)
-
-    // TUTORIAL: The above call to gemm(tCsA, tCsB, tCrC) is equivalent to
-    //   CUTE_UNROLL
-    //   for (int k = 0; k < size<1>(tCsA); ++k) {
-    //     CUTE_UNROLL
-    //     for (int m = 0; m < size<0>(tCrC); ++m) {
-    //       CUTE_UNROLL
-    //       for (int n = 0; n < size<1>(tCrC); ++n) {
-    //         tCrC(m,n) += tCsA(m,k) * tCsB(n,k);
-    //       }
-    //     }
-    //   }
-
-    __syncthreads(); // Wait for all threads to read from smem
+    cp_async_fence();
+    cp_async_wait<0>(); 
+    __syncthreads();    
+    CUTE_UNROLL
+    for (int m = 0; m < 2; ++m) {
+      CUTE_UNROLL
+      for (int n = 0; n < 2; ++n) {
+        gemm(lA(_, m, _), lB(_, n, _), rC(_, _, m, n));
+      }
+    }
+    __syncthreads();
   }
 
-
-  //
-  // Epilogue
-  //
-
-  axpby(alpha, tCrC, beta, tCgC);
-
-  // TUTORIAL: The above call to axpby(alpha, tCrC, beta, tCgC) is equivalent to
-  //   CUTE_UNROLL
-  //   for (int i = 0; i < size(tCrC); ++i) {
-  //     tCgC(i) = alpha * tCrC(i) + beta * tCgC(i);
-  //   }
+  axpby(alpha, rC, beta, lC);
 }

@@ -1,12 +1,17 @@
 # Sion
+> ⚠️ Early development stage. Features are limited and high performance is not guaranteed.
 
 Sion is a high-performance CUDA AI operator library, focusing on GPU implementations of core deep learning operators. It aims for extreme performance and numerical stability.
 
-> ⚠️ Early development stage. Features are limited and high performance is not guaranteed.
+The project is organized into two layers:
+- **felix** – core CUDA operator implementations
+- **sion** – Libtorch-based wrapper layer with Python bindings
+
 
 💡 The name is inspired by the character Sion from the game *Eden**.
 
 🌐 [中文版 README_CN.md](README_CN.md)
+
 
 ## Supported
 
@@ -46,6 +51,16 @@ ninja install
 
 ## Usage
 ### C++
+#### Felix
+```CMake
+find_package(Felix REQUIRED)
+
+target_link_libraries(your_target
+    PRIVATE
+        Felix::felix
+)
+```
+#### Sion
 ```CMake
 find_package(Sion REQUIRED)
 

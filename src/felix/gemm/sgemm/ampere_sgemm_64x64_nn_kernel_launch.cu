@@ -44,7 +44,7 @@ FelixStatus cute_gemm_nn(uint32_t m, uint32_t n, uint32_t k, float alpha,
   // Define CTA tile sizes (static)
   auto bM = Int<128>{};
   auto bN = Int<128>{};
-  auto bK = Int<8>{};
+  auto bK = Int<16>{};
   auto cta_tiler = make_shape(bM, bN, bK); // (BLK_M, BLK_N, BLK_K)
 
   // Define the smem layouts (static)
@@ -58,8 +58,7 @@ FelixStatus cute_gemm_nn(uint32_t m, uint32_t n, uint32_t k, float alpha,
   auto tA = make_layout(make_shape(Int<32>{}, Int<8>{}),
                         LayoutRight{});                   // (m,k) -> thr_idx
   auto tB = make_layout(make_shape(Int<32>{}, Int<8>{})); // (n,k) -> thr_idx
-  auto tC = make_layout(make_shape(Int<16>{}, Int<16>{}),
-                        LayoutRight{}); // (m,n) -> thr_idx
+  auto tC = make_layout(make_shape(Int<256>{}));
 
   dim3 dimBlock(size(tC));
   dim3 dimGrid(size(ceil_div(M, bM)), size(ceil_div(N, bN)));
