@@ -1,3 +1,4 @@
+#include "cute/layout.hpp"
 #include "kernels/ampere_sgemm_64x64_align1.cuh"
 #include "kernels/cute_sgemm.cuh"
 #include <felix/felix.hpp>
@@ -44,7 +45,7 @@ FelixStatus cute_gemm_nn(uint32_t m, uint32_t n, uint32_t k, float alpha,
   // Define CTA tile sizes (static)
   auto bM = Int<128>{};
   auto bN = Int<128>{};
-  auto bK = Int<16>{};
+  auto bK = Int<8>{};
   auto cta_tiler = make_shape(bM, bN, bK); // (BLK_M, BLK_N, BLK_K)
 
   // Define the smem layouts (static)
@@ -56,16 +57,24 @@ FelixStatus cute_gemm_nn(uint32_t m, uint32_t n, uint32_t k, float alpha,
 
   // Define the thread layouts (static)
   auto tA = make_layout(make_shape(Int<32>{}, Int<8>{}),
-                        LayoutRight{});                   // (m,k) -> thr_idx
-  auto tB = make_layout(make_shape(Int<32>{}, Int<8>{})); // (n,k) -> thr_idx
-  auto tC = make_layout(make_shape(Int<256>{}));
-
+                        LayoutRight{});                    // (m,k) -> thr_idx
+  auto tB = make_layout(make_shape(Int<128>{}, Int<2>{})); // (n,k) -> thr_idx
+  auto tC = make_layout(make_shape(Int<2>{}, Int<128>{}), LayoutRight{});
   dim3 dimBlock(size(tC));
   dim3 dimGrid(size(ceil_div(M, bM)), size(ceil_div(N, bN)));
-  gemm_device<<<dimGrid, dimBlock, 0, stream>>>(prob_shape, cta_tiler, A, dA,
-                                                sA, tA, B, dB, sB, tB, C, dC,
-                                                sC, tC, alpha, beta);
-  cudaError_t err = cudaGetLastError();
+  cudaError_t err;
+  err = cudaFuncSetAttribute(
+      gemm_device<decltype(prob_shape), decltype(cta_tiler), decltype(dA),
+                  decltype(sA), decltype(tA), decltype(dB), decltype(sB),
+                  decltype(tB), decltype(dC), decltype(sC), decltype(tC)>,
+      cudaFuncAttributeMaxDynamicSharedMemorySize, sizeof(float) * cosize_v<decltype(sC)>);
+  if (err != cudaSuccess) {
+    return FelixStatus::make(FelixStatus::Type::API_ERROR, err);
+  }
+  gemm_device<<<dimGrid, dimBlock, sizeof(float) * cosize_v<decltype(sC)>, stream>>>(
+      prob_shape, cta_tiler, A, dA, sA, tA, B, dB, sB, tB, C, dC, sC, tC, alpha,
+      beta);
+  err = cudaGetLastError();
   if (err != cudaSuccess) {
     return FelixStatus::make(FelixStatus::Type::KERNEL_LAUNCH_FAILED, err);
   }

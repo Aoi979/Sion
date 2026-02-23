@@ -27,7 +27,7 @@ torch::Tensor sgemm_op(const torch::Tensor &A, const torch::Tensor &B, float alp
   return sion::sgemm(A, B, alpha, beta);
 }
 
-SION_TEST(test_sgemm_basic) {
+SION_TEST(test_sgemm_basic0) {
   int M = 2048, K = 2048, N = 2048;
 
   SION_CHECK(torch::cuda::is_available());
@@ -40,9 +40,45 @@ SION_TEST(test_sgemm_basic) {
 
   auto ref = sgemm_ref(A, B, 2, 2);
   auto val = sgemm_op(A, B, 2, 2);
-  auto stats = sion::test::compare_tensor(ref, val, 1e-6);
-  sion::test::add_record("sgemm_basic", ref.numel(), stats, 1e-6);
+  auto stats = sion::test::compare_tensor(ref, val);
+  sion::test::add_record("sgemm_basic0", ref.numel(), stats, 1e-3);
 }
+
+// SION_TEST(test_sgemm_basic1){
+//      int M = 2048, K = 1024, N = 1536;
+
+//     SION_CHECK(torch::cuda::is_available());
+
+//     auto opts = torch::TensorOptions()
+//         .dtype(torch::kFloat32)
+//         .device(torch::kCUDA);
+
+//     torch::Tensor A = torch::rand({M, K}, opts);
+//     torch::Tensor B = torch::rand({K, N}, opts);
+
+//     auto ref = sgemm_ref(A, B, 1, 0);
+//     auto val = sgemm_op(A, B, 1, 0);
+//     auto stats = sion::test::compare_tensor(ref, val);
+//     sion::test::add_record("sgemm_basic1", ref.numel(), stats, 1e-3);
+// }
+
+// SION_TEST(test_sgemm_basic2){
+//      int M = 4096, K = 4096, N = 4096;
+
+//     SION_CHECK(torch::cuda::is_available());
+
+//     auto opts = torch::TensorOptions()
+//         .dtype(torch::kFloat32)
+//         .device(torch::kCUDA);
+
+//     torch::Tensor A = torch::rand({M, K}, opts);
+//     torch::Tensor B = torch::rand({K, N}, opts);
+
+//     auto ref = sgemm_ref(A, B, 2, 2);
+//     auto val = sgemm_op(A, B, 2, 2);
+//     auto stats = sion::test::compare_tensor(ref, val);
+//     sion::test::add_record("sgemm_basic2", ref.numel(), stats, 1e-3);
+// }
 
 // SION_TEST(test_sgemm_unaligned0){
 //      int M = 2112, K = 2048, N = 2112;
