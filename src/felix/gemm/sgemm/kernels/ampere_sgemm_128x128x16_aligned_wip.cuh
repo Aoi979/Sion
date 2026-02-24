@@ -169,6 +169,10 @@ __global__ void ampere_sgemm_128x128x16_aligned(int M, int N, int K, float alpha
             }
         }
     }
+
+
+
+    
 #pragma unroll
     for (uint32_t dot_product_idx = 1; dot_product_idx < bK; ++dot_product_idx) {
         float *inner_A = &a_smem[1][warp_row * WM];

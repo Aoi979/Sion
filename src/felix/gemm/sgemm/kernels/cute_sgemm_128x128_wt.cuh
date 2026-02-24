@@ -5,7 +5,7 @@ template <class ProblemShape, class CtaTiler, class AStride, class ASmemLayout,
           class BThreadLayout, class CStride, class CSmemLayout,
           class CThreadLayout>
 __global__ static __launch_bounds__(decltype(size(
-    CThreadLayout{}))::value) void gemm_device(ProblemShape shape_MNK,
+    CThreadLayout{}))::value) void gemm_device_warp_tiling(ProblemShape shape_MNK,
                                                CtaTiler cta_tiler,
                                                float const *__restrict__ A,
                                                AStride dA,
@@ -73,10 +73,13 @@ __global__ static __launch_bounds__(decltype(size(
   Tensor gC =
       local_tile(mC, cta_tiler, cta_coord, Step<_1, _1, X>{}); // (BLK_M,BLK_N)
 
-  __shared__ float smemA[cosize_v<ASmemLayout>];
-  __shared__ float smemB[cosize_v<BSmemLayout>];
+  // __shared__ float smemA[cosize_v<ASmemLayout>];
+  // __shared__ float smemB[cosize_v<BSmemLayout>];
   // TODO: reuse smemA and smemB for sC to reduce shared memory usage
-  extern __shared__ float smemC[];
+  extern __shared__ float smem[];
+  auto smemA = smem;
+  auto smemB = smem + sizeof(float) * cosize_v<ASmemLayout>;
+  auto smemC = smem;
   Tensor sA = make_tensor(make_smem_ptr(smemA), sA_layout); // (BLK_M,BLK_K)
   Tensor sB = make_tensor(make_smem_ptr(smemB), sB_layout); // (BLK_N,BLK_K)
   Tensor sC = make_tensor(make_smem_ptr(smemC), sC_layout); // (BLK_M,BLK_N)

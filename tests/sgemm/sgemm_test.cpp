@@ -38,8 +38,8 @@ SION_TEST(test_sgemm_basic0) {
   torch::Tensor A = torch::rand({M, K}, opts);
   torch::Tensor B = torch::rand({K, N}, opts);
 
-  auto ref = sgemm_ref(A, B, 2, 2);
-  auto val = sgemm_op(A, B, 2, 2);
+  auto ref = sgemm_ref(A, B, 1, 0);
+  auto val = sgemm_op(A, B, 1, 0);
   auto stats = sion::test::compare_tensor(ref, val);
   sion::test::add_record("sgemm_basic0", ref.numel(), stats, 1e-3);
 }
