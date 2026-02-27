@@ -1,4 +1,6 @@
 add_subdirectory(sgemm)
 add_subdirectory(flash_attention)
+add_subdirectory(hgemm)
 add_test(NAME sgemm_test COMMAND sgemm_test)
 add_test(NAME fa_test COMMAND fa_test)
+add_test(NAME hgemm_test COMMAND hgemm_test)

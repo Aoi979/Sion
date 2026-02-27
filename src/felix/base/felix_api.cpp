@@ -27,6 +27,14 @@ FelixStatus ampere_sgemm_launch(uint32_t M, uint32_t N, uint32_t K, float alpha,
                                 alpha, A, B, beta, C, stream);
 }
 
+FelixStatus ampere_hgemm_launch(uint32_t M, uint32_t N, uint32_t K, float alpha,
+                                half const *A, half const *B, float beta,
+                                half *C, cudaStream_t stream,
+                                const std::string &kernel_name) {
+  return felix::dispatch_kernel(felix::KernelType::HGEMM, kernel_name, M, N, K,
+                                alpha, A, B, beta, C, stream);
+}
+
 template <>
 FelixStatus ampere_flash_attn_launch<64, 64>(half *Q, half *K, half *V, half *O,
                                              uint32_t heads,
