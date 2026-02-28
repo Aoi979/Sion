@@ -8,6 +8,8 @@ torch::Tensor sgemm(const torch::Tensor &A, const torch::Tensor &B, float alpha,
                     float beta);
 torch::Tensor hgemm(const torch::Tensor &A, const torch::Tensor &B, float alpha,
                     float beta);
+torch::Tensor hgemm_nt(const torch::Tensor &A, const torch::Tensor &B, float alpha,
+                    float beta);
 torch::Tensor gemm(const torch::Tensor &A, const torch::Tensor &B, float alpha,
                    float beta);
 

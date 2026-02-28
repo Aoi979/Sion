@@ -20,14 +20,23 @@ torch::Tensor hgemm_ref(const torch::Tensor &A, const torch::Tensor &B,
   return result.to(A.dtype());
 }
 
-torch::Tensor hgemm_op(const torch::Tensor &A, const torch::Tensor &B, float alpha, float beta) {
+torch::Tensor hgemm_op(const torch::Tensor &A, const torch::Tensor &B,
+                       float alpha, float beta) {
   const int64_t M = A.size(0);
   const int64_t K = A.size(1);
   const int64_t N = B.size(1);
   return sion::hgemm(A, B, alpha, beta);
 }
 
-SION_TEST(test_sgemm_basic0) {
+torch::Tensor hgemm_nt_op(const torch::Tensor &A, const torch::Tensor &B,
+                          float alpha, float beta) {
+  const int64_t M = A.size(0);
+  const int64_t K = A.size(1);
+  const int64_t N = B.size(1);
+  return sion::hgemm_nt(A, B, alpha, beta);
+}
+
+SION_TEST(test_hgemm_basic0) {
   int M = 2048, K = 2048, N = 2048;
 
   SION_CHECK(torch::cuda::is_available());
@@ -42,6 +51,24 @@ SION_TEST(test_sgemm_basic0) {
   auto val = hgemm_op(A, B, 1, 0);
   auto stats = sion::test::compare_tensor(ref, val);
   sion::test::add_record("hgemm_basic0", ref.numel(), stats, 100);
+}
+
+SION_TEST(test_hgemm_nt_basic0) {
+  int M = 2048, K = 2048, N = 2048;
+
+  SION_CHECK(torch::cuda::is_available());
+
+  auto opts =
+      torch::TensorOptions().dtype(torch::kFloat16).device(torch::kCUDA);
+
+  torch::Tensor A = torch::rand({M, K}, opts);
+  torch::Tensor B = torch::rand({K, N}, opts);
+  auto B_t = B.transpose(0, 1).contiguous();
+
+  auto ref = hgemm_ref(A, B, 1, 0);
+  auto val = hgemm_nt_op(A, B_t, 1, 0);
+  auto stats = sion::test::compare_tensor(ref, val);
+  sion::test::add_record("hgemm_nt_basic0", ref.numel(), stats, 100);
 }
 
 int main() {

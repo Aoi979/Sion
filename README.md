@@ -22,6 +22,11 @@ The project is organized into two layers:
 - **Flash Attention** (**Ampere**)  
   Currently only supports FP16. Shapes must be aligned. Features like **mask** are not supported.
 
+- **HGEMM** (**Ampere**)
+
+  Supports only problem sizes divisible by (M, N, K) = (128, 128, 64).
+  
+  
 ## Requirements
 
 - **C++20**

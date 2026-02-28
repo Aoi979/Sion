@@ -12,7 +12,7 @@ FelixStatus ampere_sgemm_launch(
 FelixStatus ampere_hgemm_launch(
     uint32_t M, uint32_t N, uint32_t K, float alpha, half const *A,
     half const *B, float beta, half *C, cudaStream_t stream,
-    const std::string &kernel_name = "cute_hgemm_128x128_nt");
+    const std::string &kernel_name = "cute_hgemm_128x128_nn");
 
 template <int HEAD_DIM, int Bc = 64>
 FelixStatus

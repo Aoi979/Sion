@@ -1,18 +1,25 @@
 # Sion
+> ⚠️ 当前处于早期开发阶段，功能较少，性能暂不保证。
+ 
 Sion 是一个 高性能 CUDA AI 算子库，专注深度学习核心算子的 GPU 实现。追求极致性能与数值稳定性。
-> ⚠️ 当前处于早期开发阶段，功能较少，性能暂不保证。 
 
+本项目分为两个层级：
+- felix —— 核心 CUDA 算子实现层
+- sion —— 基于 Libtorch 的封装层，提供 Python 绑定
 
 💡 名称来源于游戏 Eden* 中的角色 Sion
 
-
+🌐 [English README.md](README.md)
 ## 已支持
 - **SGEMM** (**SIMT**)
 ## 部分支持
-- **flash_attention** (**Ampere**) 
+- **Flash Attention** (**Ampere**) 
    
   目前仅支持 FP16, 形状必须对齐, 不支持 **mask**等特性。
 
+- **HGEMM** (**Ampere**)
+  
+  仅支持问题规模满足 (M, N, K) = (128, 128, 64) 整数倍。
 
 ## 环境要求
 
@@ -27,12 +34,12 @@ Sion 是一个 高性能 CUDA AI 算子库，专注深度学习核心算子的 G
 git clone https://github.com/Aoi979/Sion.git
 cd sion
 mkdir build && cd build
-cmake -G Ninja -DTORCH_ROOT=/path/to/libtorch ..
+cmake -G Ninja ..
 ninja
 ```
 若需启用 Python 绑定：
 ```bash
-cmake -G Ninja -DBUILD_PYTHON_BINDING=ON -DTORCH_ROOT=/path/to/libtorch ..
+cmake -G Ninja -DBUILD_PYTHON_BINDING=ON ..
 ```
 ## 安装
 构建完成后，执行：
@@ -42,7 +49,16 @@ ninja install
 
 ## 使用方法
 ### C++
-在 CMake 项目中：
+#### Felix
+```CMake
+find_package(Felix REQUIRED)
+
+target_link_libraries(your_target
+    PRIVATE
+        Felix::felix
+)
+```
+#### Sion
 ```CMake
 find_package(Sion REQUIRED)
 

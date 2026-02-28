@@ -17,7 +17,7 @@ template <class ProblemShape, class CtaTiler, class TA, class AStride,
           class TC, class CStride, class CSmemLayout, class TiledMma,
           class Alpha, class Beta>
 __global__ static __launch_bounds__(decltype(size(
-    TiledMma{}))::value) void gemm_device(ProblemShape shape_MNK,
+    TiledMma{}))::value) void cute_ampere_hgemm_16816(ProblemShape shape_MNK,
                                           CtaTiler cta_tiler, TA const *A,
                                           AStride dA, ASmemLayout sA_layout,
                                           TiledCopyA copy_a,
