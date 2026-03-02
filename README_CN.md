@@ -7,7 +7,7 @@ Sion 是一个 高性能 CUDA AI 算子库，专注深度学习核心算子的 G
 - felix —— 核心 CUDA 算子实现层
 - sion —— 基于 Libtorch 的封装层，提供 Python 绑定
 
-💡 名称来源于游戏 Eden* 中的角色 Sion
+💡 名称来源于游戏 *Eden** 中的角色 Sion
 
 🌐 [English README.md](README.md)
 ## 已支持

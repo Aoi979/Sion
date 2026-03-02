@@ -7,7 +7,7 @@ namespace felix {
 FelixStatus ampere_sgemm_launch(
     uint32_t M, uint32_t N, uint32_t K, float alpha, float const *A,
     float const *B, float beta, float *C, cudaStream_t stream,
-    const std::string &kernel_name = "cute_sgemm_128x128_nn_wt_db");
+    const std::string &kernel_name = "ampere_sgemm_64x64_nn");
 
 FelixStatus ampere_hgemm_launch(
     uint32_t M, uint32_t N, uint32_t K, float alpha, half const *A,

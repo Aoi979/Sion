@@ -1,5 +1,5 @@
 #include "../common.hpp"
-#include <felix/felix.hpp>
+#include <cublas_v2.h>
 #include <cuda_runtime.h>
 #include <cstdint>
 #include <cstdlib>
@@ -20,7 +20,7 @@ struct Args {
   float alpha = 1.0f;
   float beta = 0.0f;
   std::vector<Shape> shapes;
-  std::string out = "sion_bench.md";
+  std::string out = "cublas_bench.md";
 };
 
 static void print_usage(const char *prog) {
@@ -28,7 +28,6 @@ static void print_usage(const char *prog) {
       << "Usage: " << prog
       << " [--shape MxNxK] [--m M --n N --k K] [--alpha A --beta B]\n"
       << "       [--warmup W --repeat R --iters I] [--out FILE]\n"
-      << "Note: current kernel requires M/N % 128 == 0 and K % 16 == 0\n"
       << "Example:\n"
       << "  " << prog << " --shape 2048x2048x2048 --warmup 5 --repeat 20 "
       << "--iters 10\n";
@@ -58,15 +57,42 @@ static std::string shape_to_string(const Shape &s) {
   return oss.str();
 }
 
-static bool is_aligned_shape(const Shape &s) {
-  return (s.m % 128u == 0u) && (s.n % 128u == 0u) && (s.k % 16u == 0u);
-}
-
 static void fill_random(std::vector<float> &v) {
   std::mt19937 rng(123);
   std::uniform_real_distribution<float> dist(-1.0f, 1.0f);
   for (auto &x : v) {
     x = dist(rng);
+  }
+}
+
+static const char *cublas_status_to_string(cublasStatus_t status) {
+  switch (status) {
+  case CUBLAS_STATUS_SUCCESS:
+    return "CUBLAS_STATUS_SUCCESS";
+  case CUBLAS_STATUS_NOT_INITIALIZED:
+    return "CUBLAS_STATUS_NOT_INITIALIZED";
+  case CUBLAS_STATUS_ALLOC_FAILED:
+    return "CUBLAS_STATUS_ALLOC_FAILED";
+  case CUBLAS_STATUS_INVALID_VALUE:
+    return "CUBLAS_STATUS_INVALID_VALUE";
+  case CUBLAS_STATUS_ARCH_MISMATCH:
+    return "CUBLAS_STATUS_ARCH_MISMATCH";
+  case CUBLAS_STATUS_MAPPING_ERROR:
+    return "CUBLAS_STATUS_MAPPING_ERROR";
+  case CUBLAS_STATUS_EXECUTION_FAILED:
+    return "CUBLAS_STATUS_EXECUTION_FAILED";
+  case CUBLAS_STATUS_INTERNAL_ERROR:
+    return "CUBLAS_STATUS_INTERNAL_ERROR";
+  default:
+    return "CUBLAS_STATUS_UNKNOWN";
+  }
+}
+
+static void cublas_check(cublasStatus_t status, const char *msg) {
+  if (status != CUBLAS_STATUS_SUCCESS) {
+    std::cerr << "[bench] " << msg << ": " << cublas_status_to_string(status)
+              << "\n";
+    std::terminate();
   }
 }
 
@@ -125,19 +151,13 @@ int main(int argc, char **argv) {
     args.shapes.push_back({2048, 2048, 2048});
   }
 
-  for (const auto &shape : args.shapes) {
-    if (!is_aligned_shape(shape)) {
-      std::cerr
-          << "Unsupported shape " << shape_to_string(shape)
-          << ": ampere_sgemm_128x128_nn_a1b0 requires M/N multiple of 128 "
-             "and K multiple of 16\n";
-      return 1;
-    }
-  }
-
   cudaStream_t stream{};
   sion::bench::cuda_check(cudaStreamCreate(&stream),
                           "cuda stream create failed");
+
+  cublasHandle_t handle{};
+  cublas_check(cublasCreate(&handle), "cublas handle create failed");
+  cublas_check(cublasSetStream(handle, stream), "cublas set stream failed");
 
   cudaDeviceProp prop{};
   sion::bench::cuda_check(cudaGetDeviceProperties(&prop, 0),
@@ -185,11 +205,18 @@ int main(int argc, char **argv) {
     sion::bench::cuda_check(cudaStreamSynchronize(stream),
                             "H2D sync failed");
 
-    auto launch = [&](cudaStream_t s) {
-      auto status = felix::ampere_sgemm_launch(
-          shape.m, shape.n, shape.k, args.alpha, dA, dB, args.beta, dC, s,"ampere_sgemm_128x128_nn_a1b0");
-      if (!status.ok()) {
-        std::cerr << "Kernel launch failed: " << status.str() << "\n";
+    auto launch = [&](cudaStream_t) {
+      // Row-major C(M,N) = A(M,K) * B(K,N) via column-major cublasSgemm:
+      // C^T(N,M) = B^T(N,K) * A^T(K,M).
+      cublasStatus_t status =
+          cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, static_cast<int>(shape.n),
+                      static_cast<int>(shape.m), static_cast<int>(shape.k),
+                      &args.alpha, dB, static_cast<int>(shape.n), dA,
+                      static_cast<int>(shape.k), &args.beta, dC,
+                      static_cast<int>(shape.n));
+      if (status != CUBLAS_STATUS_SUCCESS) {
+        std::cerr << "cuBLAS launch failed: "
+                  << cublas_status_to_string(status) << "\n";
         std::exit(1);
       }
     };
@@ -198,17 +225,16 @@ int main(int argc, char **argv) {
     const double flops =
         2.0 * static_cast<double>(shape.m) * static_cast<double>(shape.n) *
         static_cast<double>(shape.k);
-    const double tflops =
-        flops / (stats.avg_ms * 1e-3) / 1.0e12;
+    const double tflops = flops / (stats.avg_ms * 1e-3) / 1.0e12;
     stats.tflops = tflops;
 
-    std::cout << "[Sion] sgemm " << shape_to_string(shape)
+    std::cout << "[cuBLAS] sgemm " << shape_to_string(shape)
               << " avg_ms=" << stats.avg_ms << " tflops=" << stats.tflops
               << "\n";
 
-    sion::bench::print_stats_md_file(
-        stats, "ampere_sgemm_128x128_nn_a1b0", device_name, "f32",
-        shape_to_string(shape), args.out, header);
+    sion::bench::print_stats_md_file(stats, "cublas_sgemm_nn", device_name,
+                                     "f32", shape_to_string(shape), args.out,
+                                     header);
     header = false;
 
     sion::bench::cuda_check(cudaFree(dA), "cudaFree A failed");
@@ -216,8 +242,9 @@ int main(int argc, char **argv) {
     sion::bench::cuda_check(cudaFree(dC), "cudaFree C failed");
   }
 
+  cublas_check(cublasDestroy(handle), "cublas handle destroy failed");
   sion::bench::cuda_check(cudaStreamDestroy(stream),
                           "cuda stream destroy failed");
-  std::cout << "[Sion] benchmarks finished, results in " << args.out << "\n";
+  std::cout << "[cuBLAS] benchmarks finished, results in " << args.out << "\n";
   return 0;
 }

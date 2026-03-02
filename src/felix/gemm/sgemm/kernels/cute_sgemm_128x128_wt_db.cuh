@@ -198,6 +198,5 @@ __global__ static __launch_bounds__(
            rC(_, _, m, n));
     }
   }
-  // axpby(alpha, rC, beta, glC);
-  copy(rC, glC);
+  axpby(alpha, rC, beta, glC);
 }

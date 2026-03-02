@@ -1,0 +1,6 @@
+find_package(CUDAToolkit REQUIRED)
+add_executable(hgemm_bench hgemm_bench.cpp)
+add_executable(cublas_hgemm_bench cublas_hgemm_bench.cpp)
+target_link_libraries(hgemm_bench PRIVATE sion CUDA::cudart)
+target_include_directories(hgemm_bench PRIVATE ${CMAKE_SOURCE_DIR}/include)
+target_link_libraries(cublas_hgemm_bench PRIVATE CUDA::cudart CUDA::cublas)
