@@ -19,18 +19,40 @@ struct Args {
   sion::bench::BenchmarkConfig bench_cfg;
   float alpha = 1.0f;
   float beta = 0.0f;
+  std::string kernel = "cute_sgemm_64x64_nn";
   std::vector<Shape> shapes;
   std::string out = "sion_bench.md";
 };
+
+struct Alignment {
+  uint32_t m = 1;
+  uint32_t n = 1;
+  uint32_t k = 1;
+};
+
+static Alignment kernel_alignment(const std::string &kernel) {
+  if (kernel == "ampere_sgemm_128x128_nn_a1b0") {
+    return {128, 128, 16};
+  }
+  if (kernel == "cute_sgemm_64x64_nn" || kernel == "cute_sgemm_64x64_nn_swizzle" ||
+      kernel == "ampere_sgemm_64x64_nn") {
+    return {64, 64, 8};
+  }
+  return {};
+}
 
 static void print_usage(const char *prog) {
   std::cout
       << "Usage: " << prog
       << " [--shape MxNxK] [--m M --n N --k K] [--alpha A --beta B]\n"
-      << "       [--warmup W --repeat R --iters I] [--out FILE]\n"
-      << "Note: current kernel requires M/N % 128 == 0 and K % 16 == 0\n"
+      << "       [--kernel NAME] [--warmup W --repeat R --iters I] [--out FILE]\n"
+      << "Default kernel: ampere_sgemm_128x128_nn_a1b0\n"
+      << "Known alignments:\n"
+      << "  ampere_sgemm_128x128_nn_a1b0: M/N % 128 == 0, K % 16 == 0\n"
+      << "  cute_sgemm_64x64_nn(_swizzle), ampere_sgemm_64x64_nn: M/N % 64 == 0, K % 8 == 0\n"
       << "Example:\n"
-      << "  " << prog << " --shape 2048x2048x2048 --warmup 5 --repeat 20 "
+      << "  " << prog << " --kernel cute_sgemm_64x64_nn_swizzle "
+      << "--shape 2048x2048x2048 --warmup 5 --repeat 20 "
       << "--iters 10\n";
 }
 
@@ -58,8 +80,8 @@ static std::string shape_to_string(const Shape &s) {
   return oss.str();
 }
 
-static bool is_aligned_shape(const Shape &s) {
-  return (s.m % 128u == 0u) && (s.n % 128u == 0u) && (s.k % 16u == 0u);
+static bool is_aligned_shape(const Shape &s, const Alignment &a) {
+  return (s.m % a.m == 0u) && (s.n % a.n == 0u) && (s.k % a.k == 0u);
 }
 
 static void fill_random(std::vector<float> &v) {
@@ -93,6 +115,8 @@ int main(int argc, char **argv) {
       args.alpha = std::stof(argv[++i]);
     } else if (arg == "--beta" && i + 1 < argc) {
       args.beta = std::stof(argv[++i]);
+    } else if (arg == "--kernel" && i + 1 < argc) {
+      args.kernel = argv[++i];
     } else if (arg == "--warmup" && i + 1 < argc) {
       args.bench_cfg.warmup = std::stoi(argv[++i]);
     } else if (arg == "--repeat" && i + 1 < argc) {
@@ -125,12 +149,14 @@ int main(int argc, char **argv) {
     args.shapes.push_back({2048, 2048, 2048});
   }
 
+  const Alignment align = kernel_alignment(args.kernel);
   for (const auto &shape : args.shapes) {
-    if (!is_aligned_shape(shape)) {
+    if (!is_aligned_shape(shape, align)) {
       std::cerr
           << "Unsupported shape " << shape_to_string(shape)
-          << ": ampere_sgemm_128x128_nn_a1b0 requires M/N multiple of 128 "
-             "and K multiple of 16\n";
+          << " for kernel " << args.kernel << ": require M multiple of "
+          << align.m << ", N multiple of " << align.n << ", K multiple of "
+          << align.k << "\n";
       return 1;
     }
   }
@@ -187,7 +213,8 @@ int main(int argc, char **argv) {
 
     auto launch = [&](cudaStream_t s) {
       auto status = felix::ampere_sgemm_launch(
-          shape.m, shape.n, shape.k, args.alpha, dA, dB, args.beta, dC, s,"ampere_sgemm_128x128_nn_a1b0");
+          shape.m, shape.n, shape.k, args.alpha, dA, dB, args.beta, dC, s,
+          args.kernel);
       if (!status.ok()) {
         std::cerr << "Kernel launch failed: " << status.str() << "\n";
         std::exit(1);
@@ -204,10 +231,11 @@ int main(int argc, char **argv) {
 
     std::cout << "[Sion] sgemm " << shape_to_string(shape)
               << " avg_ms=" << stats.avg_ms << " tflops=" << stats.tflops
+              << " kernel=" << args.kernel
               << "\n";
 
     sion::bench::print_stats_md_file(
-        stats, "ampere_sgemm_128x128_nn_a1b0", device_name, "f32",
+        stats, args.kernel, device_name, "f32",
         shape_to_string(shape), args.out, header);
     header = false;
 
