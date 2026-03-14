@@ -175,7 +175,7 @@ __global__ static __launch_bounds__(decltype(size(
     cp_async_wait<K_PIPE_MAX - 2>();
     __syncthreads();
 
-    // Prefetch the first rmem from the first k-tile
+    // Prefetch the first rmem from the first k-block
     copy(s2r_atom_a, tXsA_p(_, _, Int<0>{}), tXrA(_, _, Int<0>{}));
     copy(s2r_atom_b, tXsB_p(_, _, Int<0>{}), tXrB(_, _, Int<0>{}));
   }

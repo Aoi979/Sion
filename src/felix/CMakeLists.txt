@@ -29,6 +29,7 @@ target_include_directories(felix PRIVATE
 add_subdirectory(base)
 add_subdirectory(gemm)
 add_subdirectory(flash_attention)
+add_subdirectory(topk)
 
 install(TARGETS felix
     EXPORT FelixTargets
