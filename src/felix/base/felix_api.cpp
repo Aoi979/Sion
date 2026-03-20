@@ -35,6 +35,15 @@ FelixStatus ampere_hgemm_launch(uint32_t M, uint32_t N, uint32_t K, float alpha,
                                 alpha, A, B, beta, C, stream);
 }
 
+FelixStatus sorting_radix_select_launch(float const *data, float *out,
+                                        uint32_t num_slices,
+                                        uint32_t slice_size, uint32_t k,
+                                        bool largest, cudaStream_t stream,
+                                        const std::string &kernel_name) {
+  return felix::dispatch_kernel(felix::KernelType::TopK, kernel_name, data, out,
+                                num_slices, slice_size, k, largest, stream);
+}
+
 template <>
 FelixStatus ampere_flash_attn_launch<64, 64>(half *Q, half *K, half *V, half *O,
                                              uint32_t heads,

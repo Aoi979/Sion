@@ -1,4 +1,5 @@
 #include "kernels/ampere_flash_attn_mma16168_64_1D_warp_tiling.cuh"
+#include "kernels/cute_flash_attn_mma16816.cuh"
 #include <felix/registry.hpp>
 #include <felix/status.hpp>
 

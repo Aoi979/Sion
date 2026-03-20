@@ -188,3 +188,27 @@ __device__ void radixSelect(const scalar_t *data, index_t k, bool largest,
   }
   *topK = TopKTypeConfig<scalar_t>::deconvert(desired);
 }
+
+__global__ void sorting_radix_select_kernel(const float *data, float *out,
+                                            uint32_t num_slices,
+                                            uint32_t slice_size, uint32_t k,
+                                            bool largest) {
+  const uint32_t slice = static_cast<uint32_t>(blockIdx.x);
+  if (slice >= num_slices) {
+    return;
+  }
+
+  const float *slice_data = data + slice * slice_size;
+
+  __shared__ int smem[RADIX_SIZE];
+  __shared__ float topk;
+
+  radixSelect<float, TopKTypeConfig<float>::RadixType, int>(
+      slice_data, static_cast<int>(k), largest, static_cast<int>(slice_size),
+      /*withinSliceStride=*/1, smem, &topk);
+
+  __syncthreads();
+  if (threadIdx.x == 0) {
+    out[slice] = topk;
+  }
+}

@@ -177,7 +177,6 @@ __global__ void ampere_flash_attn_mma16168_64_1D_warp_tiling(half *Q, half *K, h
         CP_ASYNC_WAIT_GROUP(STAGE - 2);
         __syncthreads();
     }
-// #pragma unroll
     for (int tile_K_seqlen = 0; tile_K_seqlen < Tc; tile_K_seqlen++) {
         uint32_t K_smem_select = (tile_K_seqlen % STAGE);
         uint32_t K_smem_select_next = (tile_K_seqlen + (STAGE - 1)) % STAGE;

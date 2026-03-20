@@ -5,7 +5,7 @@
 
 namespace felix {
 
-enum class KernelType : uint8_t { HGEMM, SGEMM, FlashAttn_64, FlashAttn_128 };
+enum class KernelType : uint8_t { HGEMM, SGEMM, FlashAttn_64, FlashAttn_128, TopK };
 
 struct KernelEntry {
   KernelType type;

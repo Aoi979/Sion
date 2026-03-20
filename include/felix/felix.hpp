@@ -14,6 +14,11 @@ FelixStatus ampere_hgemm_launch(
     half const *B, float beta, half *C, cudaStream_t stream,
     const std::string &kernel_name = "cute_hgemm_128x128_nn");
 
+FelixStatus sorting_radix_select_launch(
+    float const *data, float *out, uint32_t num_slices, uint32_t slice_size,
+    uint32_t k, bool largest, cudaStream_t stream,
+    const std::string &kernel_name = "sorting_radix_select");
+
 template <int HEAD_DIM, int Bc = 64>
 FelixStatus
 ampere_flash_attn_launch(half *Q, half *K, half *V, half *O, uint32_t heads,
