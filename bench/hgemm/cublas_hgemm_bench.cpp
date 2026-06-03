@@ -1,9 +1,9 @@
 #include "../common.hpp"
+#include <cstdint>
+#include <cstdlib>
 #include <cublas_v2.h>
 #include <cuda_fp16.h>
 #include <cuda_runtime.h>
-#include <cstdint>
-#include <cstdlib>
 #include <iostream>
 #include <random>
 #include <sstream>
@@ -149,9 +149,8 @@ int main(int argc, char **argv) {
       std::cerr << "If using --m/--n/--k, all must be > 0\n";
       return 1;
     }
-    args.shapes.push_back(
-        {static_cast<uint32_t>(m), static_cast<uint32_t>(n),
-         static_cast<uint32_t>(k)});
+    args.shapes.push_back({static_cast<uint32_t>(m), static_cast<uint32_t>(n),
+                           static_cast<uint32_t>(k)});
   }
 
   if (args.shapes.empty()) {
@@ -207,20 +206,19 @@ int main(int argc, char **argv) {
     sion::bench::cuda_check(cudaMalloc(&dC, c_elems * sizeof(half)),
                             "cudaMalloc C failed");
 
-    sion::bench::cuda_check(
-        cudaMemcpyAsync(dA, hA.data(), a_elems * sizeof(half),
-                        cudaMemcpyHostToDevice, stream),
-        "cudaMemcpyAsync A failed");
-    sion::bench::cuda_check(
-        cudaMemcpyAsync(dB, hB.data(), b_elems * sizeof(half),
-                        cudaMemcpyHostToDevice, stream),
-        "cudaMemcpyAsync B failed");
-    sion::bench::cuda_check(
-        cudaMemcpyAsync(dC, hC.data(), c_elems * sizeof(half),
-                        cudaMemcpyHostToDevice, stream),
-        "cudaMemcpyAsync C failed");
-    sion::bench::cuda_check(cudaStreamSynchronize(stream),
-                            "H2D sync failed");
+    sion::bench::cuda_check(cudaMemcpyAsync(dA, hA.data(),
+                                            a_elems * sizeof(half),
+                                            cudaMemcpyHostToDevice, stream),
+                            "cudaMemcpyAsync A failed");
+    sion::bench::cuda_check(cudaMemcpyAsync(dB, hB.data(),
+                                            b_elems * sizeof(half),
+                                            cudaMemcpyHostToDevice, stream),
+                            "cudaMemcpyAsync B failed");
+    sion::bench::cuda_check(cudaMemcpyAsync(dC, hC.data(),
+                                            c_elems * sizeof(half),
+                                            cudaMemcpyHostToDevice, stream),
+                            "cudaMemcpyAsync C failed");
+    sion::bench::cuda_check(cudaStreamSynchronize(stream), "H2D sync failed");
 
     auto launch = [&](cudaStream_t) {
       // Row-major C(M,N) = A(M,K) * B(K,N) via column-major cublas:
@@ -233,16 +231,16 @@ int main(int argc, char **argv) {
           static_cast<int>(shape.n), CUBLAS_COMPUTE_32F,
           CUBLAS_GEMM_DEFAULT_TENSOR_OP);
       if (status != CUBLAS_STATUS_SUCCESS) {
-        std::cerr << "cuBLAS launch failed: "
-                  << cublas_status_to_string(status) << "\n";
+        std::cerr << "cuBLAS launch failed: " << cublas_status_to_string(status)
+                  << "\n";
         std::exit(1);
       }
     };
 
     auto stats = sion::bench::run_kernel_bench(launch, args.bench_cfg, stream);
-    const double flops =
-        2.0 * static_cast<double>(shape.m) * static_cast<double>(shape.n) *
-        static_cast<double>(shape.k);
+    const double flops = 2.0 * static_cast<double>(shape.m) *
+                         static_cast<double>(shape.n) *
+                         static_cast<double>(shape.k);
     const double tflops = flops / (stats.avg_ms * 1e-3) / 1.0e12;
     stats.tflops = tflops;
 
