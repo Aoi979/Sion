@@ -1,0 +1,509 @@
+LOG=bench_sm90_coop_swizzle_sweep_20260617_032552.log
+Wed Jun 17 03:25:52 CST 2026
+NVIDIA H800 PCIe, 9.0, 345 MHz, 1593 MHz, 31
+===== SWIZZLE=1 M=8192 N=8192 K=8192 warmup=10 iters=200 =====
+hgemm_sm90_cooperative M=8192 N=8192 K=8192 warmup=10 iters=200 avg_ms=3.0758 TFLOP/s=357.4696
+hgemm_sm90_cooperative C[0]=0.00099564 checksum=-8.71434700
+hgemm_cublas_fp32acc M=8192 N=8192 K=8192 warmup=10 iters=200 avg_ms=2.4009 TFLOP/s=457.9638
+hgemm_cublas_fp32acc C[0]=0.00099564 checksum=-8.71434700
+hgemm_cublas_fp16acc M=8192 N=8192 K=8192 warmup=10 iters=200 avg_ms=2.3604 TFLOP/s=465.8102
+hgemm_cublas_fp16acc C[0]=0.00099945 checksum=-8.77536488
+
+--- Relative speedup vs hgemm_cublas_fp16acc ---
+hgemm_sm90_cooperative0.77x
+hgemm_cublas_fp32acc0.98x
+hgemm_cublas_fp16acc1.00x
+===== SWIZZLE=2 M=8192 N=8192 K=8192 warmup=10 iters=200 =====
+hgemm_sm90_cooperative M=8192 N=8192 K=8192 warmup=10 iters=200 avg_ms=3.0940 TFLOP/s=355.3681
+hgemm_sm90_cooperative C[0]=0.00099564 checksum=-8.71434700
+hgemm_cublas_fp32acc M=8192 N=8192 K=8192 warmup=10 iters=200 avg_ms=2.3808 TFLOP/s=461.8326
+hgemm_cublas_fp32acc C[0]=0.00099564 checksum=-8.71434700
+hgemm_cublas_fp16acc M=8192 N=8192 K=8192 warmup=10 iters=200 avg_ms=2.3619 TFLOP/s=465.5225
+hgemm_cublas_fp16acc C[0]=0.00099945 checksum=-8.77536488
+
+--- Relative speedup vs hgemm_cublas_fp16acc ---
+hgemm_sm90_cooperative0.76x
+hgemm_cublas_fp32acc0.99x
+hgemm_cublas_fp16acc1.00x
+===== SWIZZLE=4 M=8192 N=8192 K=8192 warmup=10 iters=200 =====
+hgemm_sm90_cooperative M=8192 N=8192 K=8192 warmup=10 iters=200 avg_ms=2.9331 TFLOP/s=374.8642
+hgemm_sm90_cooperative C[0]=0.00099564 checksum=-8.71434700
+hgemm_cublas_fp32acc M=8192 N=8192 K=8192 warmup=10 iters=200 avg_ms=2.4088 TFLOP/s=456.4646
+hgemm_cublas_fp32acc C[0]=0.00099564 checksum=-8.71434700
+hgemm_cublas_fp16acc M=8192 N=8192 K=8192 warmup=10 iters=200 avg_ms=2.3535 TFLOP/s=467.1749
+hgemm_cublas_fp16acc C[0]=0.00099945 checksum=-8.77536488
+
+--- Relative speedup vs hgemm_cublas_fp16acc ---
+hgemm_sm90_cooperative0.80x
+hgemm_cublas_fp32acc0.98x
+hgemm_cublas_fp16acc1.00x
+===== SWIZZLE=8 M=8192 N=8192 K=8192 warmup=10 iters=200 =====
+hgemm_sm90_cooperative M=8192 N=8192 K=8192 warmup=10 iters=200 avg_ms=2.7838 TFLOP/s=394.9640
+hgemm_sm90_cooperative C[0]=0.00099564 checksum=-8.71434700
+hgemm_cublas_fp32acc M=8192 N=8192 K=8192 warmup=10 iters=200 avg_ms=2.4073 TFLOP/s=456.7491
+hgemm_cublas_fp32acc C[0]=0.00099564 checksum=-8.71434700
+hgemm_cublas_fp16acc M=8192 N=8192 K=8192 warmup=10 iters=200 avg_ms=2.3457 TFLOP/s=468.7312
+hgemm_cublas_fp16acc C[0]=0.00099945 checksum=-8.77536488
+
+--- Relative speedup vs hgemm_cublas_fp16acc ---
+hgemm_sm90_cooperative0.84x
+hgemm_cublas_fp32acc0.97x
+hgemm_cublas_fp16acc1.00x
+===== SWIZZLE=16 M=8192 N=8192 K=8192 warmup=10 iters=200 =====
+hgemm_sm90_cooperative M=8192 N=8192 K=8192 warmup=10 iters=200 avg_ms=2.3922 TFLOP/s=459.6146
+hgemm_sm90_cooperative C[0]=0.00099564 checksum=-8.71434700
+hgemm_cublas_fp32acc M=8192 N=8192 K=8192 warmup=10 iters=200 avg_ms=2.4121 TFLOP/s=455.8315
+hgemm_cublas_fp32acc C[0]=0.00099564 checksum=-8.71434700
+hgemm_cublas_fp16acc M=8192 N=8192 K=8192 warmup=10 iters=200 avg_ms=2.3318 TFLOP/s=471.5382
+hgemm_cublas_fp16acc C[0]=0.00099945 checksum=-8.77536488
+
+--- Relative speedup vs hgemm_cublas_fp16acc ---
+hgemm_sm90_cooperative0.97x
+hgemm_cublas_fp32acc0.97x
+hgemm_cublas_fp16acc1.00x
+===== SWIZZLE=32 M=8192 N=8192 K=8192 warmup=10 iters=200 =====
+hgemm_sm90_cooperative M=8192 N=8192 K=8192 warmup=10 iters=200 avg_ms=2.4218 TFLOP/s=454.0104
+hgemm_sm90_cooperative C[0]=0.00099564 checksum=-8.71434700
+hgemm_cublas_fp32acc M=8192 N=8192 K=8192 warmup=10 iters=200 avg_ms=2.4112 TFLOP/s=456.0078
+hgemm_cublas_fp32acc C[0]=0.00099564 checksum=-8.71434700
+hgemm_cublas_fp16acc M=8192 N=8192 K=8192 warmup=10 iters=200 avg_ms=2.3377 TFLOP/s=470.3448
+hgemm_cublas_fp16acc C[0]=0.00099945 checksum=-8.77536488
+
+--- Relative speedup vs hgemm_cublas_fp16acc ---
+hgemm_sm90_cooperative0.97x
+hgemm_cublas_fp32acc0.97x
+hgemm_cublas_fp16acc1.00x
+===== SWIZZLE=64 M=8192 N=8192 K=8192 warmup=10 iters=200 =====
+hgemm_sm90_cooperative M=8192 N=8192 K=8192 warmup=10 iters=200 avg_ms=2.4156 TFLOP/s=455.1651
+hgemm_sm90_cooperative C[0]=0.00099564 checksum=-8.71434700
+hgemm_cublas_fp32acc M=8192 N=8192 K=8192 warmup=10 iters=200 avg_ms=2.4184 TFLOP/s=454.6369
+hgemm_cublas_fp32acc C[0]=0.00099564 checksum=-8.71434700
+hgemm_cublas_fp16acc M=8192 N=8192 K=8192 warmup=10 iters=200 avg_ms=2.3444 TFLOP/s=468.9942
+hgemm_cublas_fp16acc C[0]=0.00099945 checksum=-8.77536488
+
+--- Relative speedup vs hgemm_cublas_fp16acc ---
+hgemm_sm90_cooperative0.97x
+hgemm_cublas_fp32acc0.97x
+hgemm_cublas_fp16acc1.00x
+===== SWIZZLE=1 M=16384 N=8192 K=8192 warmup=10 iters=160 =====
+hgemm_sm90_cooperative M=16384 N=8192 K=8192 warmup=10 iters=160 avg_ms=6.2384 TFLOP/s=352.4996
+hgemm_sm90_cooperative C[0]=0.00008631 checksum=-31.09231240
+hgemm_cublas_fp32acc M=16384 N=8192 K=8192 warmup=10 iters=160 avg_ms=5.0190 TFLOP/s=438.1420
+hgemm_cublas_fp32acc C[0]=0.00008631 checksum=-31.09231240
+hgemm_cublas_fp16acc M=16384 N=8192 K=8192 warmup=10 iters=160 avg_ms=5.2237 TFLOP/s=420.9744
+hgemm_cublas_fp16acc C[0]=0.00008422 checksum=-30.98832530
+
+--- Relative speedup vs hgemm_cublas_fp16acc ---
+hgemm_sm90_cooperative0.84x
+hgemm_cublas_fp32acc1.04x
+hgemm_cublas_fp16acc1.00x
+===== SWIZZLE=2 M=16384 N=8192 K=8192 warmup=10 iters=160 =====
+hgemm_sm90_cooperative M=16384 N=8192 K=8192 warmup=10 iters=160 avg_ms=6.8884 TFLOP/s=319.2352
+hgemm_sm90_cooperative C[0]=0.00008631 checksum=-31.09231240
+hgemm_cublas_fp32acc M=16384 N=8192 K=8192 warmup=10 iters=160 avg_ms=4.9667 TFLOP/s=442.7517
+hgemm_cublas_fp32acc C[0]=0.00008631 checksum=-31.09231240
+hgemm_cublas_fp16acc M=16384 N=8192 K=8192 warmup=10 iters=160 avg_ms=5.2083 TFLOP/s=422.2158
+hgemm_cublas_fp16acc C[0]=0.00008422 checksum=-30.98832530
+
+--- Relative speedup vs hgemm_cublas_fp16acc ---
+hgemm_sm90_cooperative0.76x
+hgemm_cublas_fp32acc1.05x
+hgemm_cublas_fp16acc1.00x
+===== SWIZZLE=4 M=16384 N=8192 K=8192 warmup=10 iters=160 =====
+hgemm_sm90_cooperative M=16384 N=8192 K=8192 warmup=10 iters=160 avg_ms=6.5121 TFLOP/s=337.6825
+hgemm_sm90_cooperative C[0]=0.00008631 checksum=-31.09231240
+hgemm_cublas_fp32acc M=16384 N=8192 K=8192 warmup=10 iters=160 avg_ms=4.8765 TFLOP/s=450.9473
+hgemm_cublas_fp32acc C[0]=0.00008631 checksum=-31.09231240
+hgemm_cublas_fp16acc M=16384 N=8192 K=8192 warmup=10 iters=160 avg_ms=5.1380 TFLOP/s=427.9937
+hgemm_cublas_fp16acc C[0]=0.00008422 checksum=-30.98832530
+
+--- Relative speedup vs hgemm_cublas_fp16acc ---
+hgemm_sm90_cooperative0.79x
+hgemm_cublas_fp32acc1.05x
+hgemm_cublas_fp16acc1.00x
+===== SWIZZLE=8 M=16384 N=8192 K=8192 warmup=10 iters=160 =====
+hgemm_sm90_cooperative M=16384 N=8192 K=8192 warmup=10 iters=160 avg_ms=6.1202 TFLOP/s=359.3042
+hgemm_sm90_cooperative C[0]=0.00008631 checksum=-31.09231240
+hgemm_cublas_fp32acc M=16384 N=8192 K=8192 warmup=10 iters=160 avg_ms=4.9607 TFLOP/s=443.2861
+hgemm_cublas_fp32acc C[0]=0.00008631 checksum=-31.09231240
+hgemm_cublas_fp16acc M=16384 N=8192 K=8192 warmup=10 iters=160 avg_ms=5.1406 TFLOP/s=427.7795
+hgemm_cublas_fp16acc C[0]=0.00008422 checksum=-30.98832530
+
+--- Relative speedup vs hgemm_cublas_fp16acc ---
+hgemm_sm90_cooperative0.84x
+hgemm_cublas_fp32acc1.04x
+hgemm_cublas_fp16acc1.00x
+===== SWIZZLE=16 M=16384 N=8192 K=8192 warmup=10 iters=160 =====
+hgemm_sm90_cooperative M=16384 N=8192 K=8192 warmup=10 iters=160 avg_ms=5.0633 TFLOP/s=434.3059
+hgemm_sm90_cooperative C[0]=0.00008631 checksum=-31.09231240
+hgemm_cublas_fp32acc M=16384 N=8192 K=8192 warmup=10 iters=160 avg_ms=4.8868 TFLOP/s=449.9971
+hgemm_cublas_fp32acc C[0]=0.00008631 checksum=-31.09231240
+hgemm_cublas_fp16acc M=16384 N=8192 K=8192 warmup=10 iters=160 avg_ms=5.1521 TFLOP/s=426.8207
+hgemm_cublas_fp16acc C[0]=0.00008422 checksum=-30.98832530
+
+--- Relative speedup vs hgemm_cublas_fp16acc ---
+hgemm_sm90_cooperative1.02x
+hgemm_cublas_fp32acc1.05x
+hgemm_cublas_fp16acc1.00x
+===== SWIZZLE=32 M=16384 N=8192 K=8192 warmup=10 iters=160 =====
+hgemm_sm90_cooperative M=16384 N=8192 K=8192 warmup=10 iters=160 avg_ms=4.8690 TFLOP/s=451.6414
+hgemm_sm90_cooperative C[0]=0.00008631 checksum=-31.09231240
+hgemm_cublas_fp32acc M=16384 N=8192 K=8192 warmup=10 iters=160 avg_ms=4.9294 TFLOP/s=446.0993
+hgemm_cublas_fp32acc C[0]=0.00008631 checksum=-31.09231240
+hgemm_cublas_fp16acc M=16384 N=8192 K=8192 warmup=10 iters=160 avg_ms=5.1246 TFLOP/s=429.1107
+hgemm_cublas_fp16acc C[0]=0.00008422 checksum=-30.98832530
+
+--- Relative speedup vs hgemm_cublas_fp16acc ---
+hgemm_sm90_cooperative1.05x
+hgemm_cublas_fp32acc1.04x
+hgemm_cublas_fp16acc1.00x
+===== SWIZZLE=64 M=16384 N=8192 K=8192 warmup=10 iters=160 =====
+hgemm_sm90_cooperative M=16384 N=8192 K=8192 warmup=10 iters=160 avg_ms=4.9503 TFLOP/s=444.2217
+hgemm_sm90_cooperative C[0]=0.00008631 checksum=-31.09231240
+hgemm_cublas_fp32acc M=16384 N=8192 K=8192 warmup=10 iters=160 avg_ms=4.9709 TFLOP/s=442.3750
+hgemm_cublas_fp32acc C[0]=0.00008631 checksum=-31.09231240
+hgemm_cublas_fp16acc M=16384 N=8192 K=8192 warmup=10 iters=160 avg_ms=5.1526 TFLOP/s=426.7830
+hgemm_cublas_fp16acc C[0]=0.00008422 checksum=-30.98832530
+
+--- Relative speedup vs hgemm_cublas_fp16acc ---
+hgemm_sm90_cooperative1.04x
+hgemm_cublas_fp32acc1.04x
+hgemm_cublas_fp16acc1.00x
+===== SWIZZLE=1 M=8192 N=16384 K=8192 warmup=10 iters=160 =====
+hgemm_sm90_cooperative M=8192 N=16384 K=8192 warmup=10 iters=160 avg_ms=8.3191 TFLOP/s=264.3343
+hgemm_sm90_cooperative C[0]=0.00107765 checksum=-35.43718660
+hgemm_cublas_fp32acc M=8192 N=16384 K=8192 warmup=10 iters=160 avg_ms=4.9686 TFLOP/s=442.5835
+hgemm_cublas_fp32acc C[0]=0.00107765 checksum=-35.43718660
+hgemm_cublas_fp16acc M=8192 N=16384 K=8192 warmup=10 iters=160 avg_ms=4.7751 TFLOP/s=460.5170
+hgemm_cublas_fp16acc C[0]=0.00108147 checksum=-35.38868243
+
+--- Relative speedup vs hgemm_cublas_fp16acc ---
+hgemm_sm90_cooperative0.57x
+hgemm_cublas_fp32acc0.96x
+hgemm_cublas_fp16acc1.00x
+===== SWIZZLE=2 M=8192 N=16384 K=8192 warmup=10 iters=160 =====
+hgemm_sm90_cooperative M=8192 N=16384 K=8192 warmup=10 iters=160 avg_ms=7.4383 TFLOP/s=295.6360
+hgemm_sm90_cooperative C[0]=0.00107765 checksum=-35.43718660
+hgemm_cublas_fp32acc M=8192 N=16384 K=8192 warmup=10 iters=160 avg_ms=4.9820 TFLOP/s=441.3927
+hgemm_cublas_fp32acc C[0]=0.00107765 checksum=-35.43718660
+hgemm_cublas_fp16acc M=8192 N=16384 K=8192 warmup=10 iters=160 avg_ms=4.7683 TFLOP/s=461.1739
+hgemm_cublas_fp16acc C[0]=0.00108147 checksum=-35.38868243
+
+--- Relative speedup vs hgemm_cublas_fp16acc ---
+hgemm_sm90_cooperative0.64x
+hgemm_cublas_fp32acc0.96x
+hgemm_cublas_fp16acc1.00x
+===== SWIZZLE=4 M=8192 N=16384 K=8192 warmup=10 iters=160 =====
+hgemm_sm90_cooperative M=8192 N=16384 K=8192 warmup=10 iters=160 avg_ms=6.5235 TFLOP/s=337.0911
+hgemm_sm90_cooperative C[0]=0.00107765 checksum=-35.43718660
+hgemm_cublas_fp32acc M=8192 N=16384 K=8192 warmup=10 iters=160 avg_ms=4.9471 TFLOP/s=444.5034
+hgemm_cublas_fp32acc C[0]=0.00107765 checksum=-35.43718660
+hgemm_cublas_fp16acc M=8192 N=16384 K=8192 warmup=10 iters=160 avg_ms=4.7869 TFLOP/s=459.3819
+hgemm_cublas_fp16acc C[0]=0.00108147 checksum=-35.38868243
+
+--- Relative speedup vs hgemm_cublas_fp16acc ---
+hgemm_sm90_cooperative0.73x
+hgemm_cublas_fp32acc0.97x
+hgemm_cublas_fp16acc1.00x
+===== SWIZZLE=8 M=8192 N=16384 K=8192 warmup=10 iters=160 =====
+hgemm_sm90_cooperative M=8192 N=16384 K=8192 warmup=10 iters=160 avg_ms=6.2037 TFLOP/s=354.4725
+hgemm_sm90_cooperative C[0]=0.00107765 checksum=-35.43718660
+hgemm_cublas_fp32acc M=8192 N=16384 K=8192 warmup=10 iters=160 avg_ms=4.9492 TFLOP/s=444.3200
+hgemm_cublas_fp32acc C[0]=0.00107765 checksum=-35.43718660
+hgemm_cublas_fp16acc M=8192 N=16384 K=8192 warmup=10 iters=160 avg_ms=4.7938 TFLOP/s=458.7188
+hgemm_cublas_fp16acc C[0]=0.00108147 checksum=-35.38868243
+
+--- Relative speedup vs hgemm_cublas_fp16acc ---
+hgemm_sm90_cooperative0.77x
+hgemm_cublas_fp32acc0.97x
+hgemm_cublas_fp16acc1.00x
+===== SWIZZLE=16 M=8192 N=16384 K=8192 warmup=10 iters=160 =====
+hgemm_sm90_cooperative M=8192 N=16384 K=8192 warmup=10 iters=160 avg_ms=5.1005 TFLOP/s=431.1395
+hgemm_sm90_cooperative C[0]=0.00107765 checksum=-35.43718660
+hgemm_cublas_fp32acc M=8192 N=16384 K=8192 warmup=10 iters=160 avg_ms=4.9981 TFLOP/s=439.9757
+hgemm_cublas_fp32acc C[0]=0.00107765 checksum=-35.43718660
+hgemm_cublas_fp16acc M=8192 N=16384 K=8192 warmup=10 iters=160 avg_ms=4.7842 TFLOP/s=459.6474
+hgemm_cublas_fp16acc C[0]=0.00108147 checksum=-35.38868243
+
+--- Relative speedup vs hgemm_cublas_fp16acc ---
+hgemm_sm90_cooperative0.94x
+hgemm_cublas_fp32acc0.96x
+hgemm_cublas_fp16acc1.00x
+===== SWIZZLE=32 M=8192 N=16384 K=8192 warmup=10 iters=160 =====
+hgemm_sm90_cooperative M=8192 N=16384 K=8192 warmup=10 iters=160 avg_ms=4.8644 TFLOP/s=452.0617
+hgemm_sm90_cooperative C[0]=0.00107765 checksum=-35.43718660
+hgemm_cublas_fp32acc M=8192 N=16384 K=8192 warmup=10 iters=160 avg_ms=4.9453 TFLOP/s=444.6672
+hgemm_cublas_fp32acc C[0]=0.00107765 checksum=-35.43718660
+hgemm_cublas_fp16acc M=8192 N=16384 K=8192 warmup=10 iters=160 avg_ms=4.7510 TFLOP/s=462.8591
+hgemm_cublas_fp16acc C[0]=0.00108147 checksum=-35.38868243
+
+--- Relative speedup vs hgemm_cublas_fp16acc ---
+hgemm_sm90_cooperative0.98x
+hgemm_cublas_fp32acc0.96x
+hgemm_cublas_fp16acc1.00x
+===== SWIZZLE=64 M=8192 N=16384 K=8192 warmup=10 iters=160 =====
+hgemm_sm90_cooperative M=8192 N=16384 K=8192 warmup=10 iters=160 avg_ms=5.2923 TFLOP/s=415.5174
+hgemm_sm90_cooperative C[0]=0.00107765 checksum=-35.43718660
+hgemm_cublas_fp32acc M=8192 N=16384 K=8192 warmup=10 iters=160 avg_ms=5.0235 TFLOP/s=437.7455
+hgemm_cublas_fp32acc C[0]=0.00107765 checksum=-35.43718660
+hgemm_cublas_fp16acc M=8192 N=16384 K=8192 warmup=10 iters=160 avg_ms=4.7643 TFLOP/s=461.5582
+hgemm_cublas_fp16acc C[0]=0.00108147 checksum=-35.38868243
+
+--- Relative speedup vs hgemm_cublas_fp16acc ---
+hgemm_sm90_cooperative0.90x
+hgemm_cublas_fp32acc0.95x
+hgemm_cublas_fp16acc1.00x
+===== SWIZZLE=1 M=16384 N=16384 K=8192 warmup=10 iters=80 =====
+hgemm_sm90_cooperative M=16384 N=16384 K=8192 warmup=10 iters=80 avg_ms=16.7691 TFLOP/s=262.2706
+hgemm_sm90_cooperative C[0]=0.00017452 checksum=47.80733877
+hgemm_cublas_fp32acc M=16384 N=16384 K=8192 warmup=10 iters=80 avg_ms=9.8161 TFLOP/s=448.0459
+hgemm_cublas_fp32acc C[0]=0.00017452 checksum=47.80733877
+hgemm_cublas_fp16acc M=16384 N=16384 K=8192 warmup=10 iters=80 avg_ms=9.6626 TFLOP/s=455.1597
+hgemm_cublas_fp16acc C[0]=0.00017595 checksum=47.71967262
+
+--- Relative speedup vs hgemm_cublas_fp16acc ---
+hgemm_sm90_cooperative0.58x
+hgemm_cublas_fp32acc0.98x
+hgemm_cublas_fp16acc1.00x
+===== SWIZZLE=2 M=16384 N=16384 K=8192 warmup=10 iters=80 =====
+hgemm_sm90_cooperative M=16384 N=16384 K=8192 warmup=10 iters=80 avg_ms=15.1612 TFLOP/s=290.0852
+hgemm_sm90_cooperative C[0]=0.00017452 checksum=47.80733877
+hgemm_cublas_fp32acc M=16384 N=16384 K=8192 warmup=10 iters=80 avg_ms=9.9978 TFLOP/s=439.9021
+hgemm_cublas_fp32acc C[0]=0.00017452 checksum=47.80733877
+hgemm_cublas_fp16acc M=16384 N=16384 K=8192 warmup=10 iters=80 avg_ms=9.6810 TFLOP/s=454.2974
+hgemm_cublas_fp16acc C[0]=0.00017595 checksum=47.71967262
+
+--- Relative speedup vs hgemm_cublas_fp16acc ---
+hgemm_sm90_cooperative0.64x
+hgemm_cublas_fp32acc0.97x
+hgemm_cublas_fp16acc1.00x
+===== SWIZZLE=4 M=16384 N=16384 K=8192 warmup=10 iters=80 =====
+hgemm_sm90_cooperative M=16384 N=16384 K=8192 warmup=10 iters=80 avg_ms=14.0116 TFLOP/s=313.8869
+hgemm_sm90_cooperative C[0]=0.00017452 checksum=47.80733877
+hgemm_cublas_fp32acc M=16384 N=16384 K=8192 warmup=10 iters=80 avg_ms=9.9640 TFLOP/s=441.3916
+hgemm_cublas_fp32acc C[0]=0.00017452 checksum=47.80733877
+hgemm_cublas_fp16acc M=16384 N=16384 K=8192 warmup=10 iters=80 avg_ms=9.5675 TFLOP/s=459.6856
+hgemm_cublas_fp16acc C[0]=0.00017595 checksum=47.71967262
+
+--- Relative speedup vs hgemm_cublas_fp16acc ---
+hgemm_sm90_cooperative0.68x
+hgemm_cublas_fp32acc0.96x
+hgemm_cublas_fp16acc1.00x
+===== SWIZZLE=8 M=16384 N=16384 K=8192 warmup=10 iters=80 =====
+hgemm_sm90_cooperative M=16384 N=16384 K=8192 warmup=10 iters=80 avg_ms=13.3916 TFLOP/s=328.4194
+hgemm_sm90_cooperative C[0]=0.00017452 checksum=47.80733877
+hgemm_cublas_fp32acc M=16384 N=16384 K=8192 warmup=10 iters=80 avg_ms=10.0428 TFLOP/s=437.9321
+hgemm_cublas_fp32acc C[0]=0.00017452 checksum=47.80733877
+hgemm_cublas_fp16acc M=16384 N=16384 K=8192 warmup=10 iters=80 avg_ms=9.6231 TFLOP/s=457.0321
+hgemm_cublas_fp16acc C[0]=0.00017595 checksum=47.71967262
+
+--- Relative speedup vs hgemm_cublas_fp16acc ---
+hgemm_sm90_cooperative0.72x
+hgemm_cublas_fp32acc0.96x
+hgemm_cublas_fp16acc1.00x
+===== SWIZZLE=16 M=16384 N=16384 K=8192 warmup=10 iters=80 =====
+hgemm_sm90_cooperative M=16384 N=16384 K=8192 warmup=10 iters=80 avg_ms=11.1861 TFLOP/s=393.1699
+hgemm_sm90_cooperative C[0]=0.00017452 checksum=47.80733877
+hgemm_cublas_fp32acc M=16384 N=16384 K=8192 warmup=10 iters=80 avg_ms=9.8352 TFLOP/s=447.1762
+hgemm_cublas_fp32acc C[0]=0.00017452 checksum=47.80733877
+hgemm_cublas_fp16acc M=16384 N=16384 K=8192 warmup=10 iters=80 avg_ms=9.6511 TFLOP/s=455.7047
+hgemm_cublas_fp16acc C[0]=0.00017595 checksum=47.71967262
+
+--- Relative speedup vs hgemm_cublas_fp16acc ---
+hgemm_sm90_cooperative0.86x
+hgemm_cublas_fp32acc0.98x
+hgemm_cublas_fp16acc1.00x
+===== SWIZZLE=32 M=16384 N=16384 K=8192 warmup=10 iters=80 =====
+hgemm_sm90_cooperative M=16384 N=16384 K=8192 warmup=10 iters=80 avg_ms=10.1318 TFLOP/s=434.0841
+hgemm_sm90_cooperative C[0]=0.00017452 checksum=47.80733877
+hgemm_cublas_fp32acc M=16384 N=16384 K=8192 warmup=10 iters=80 avg_ms=9.8980 TFLOP/s=444.3380
+hgemm_cublas_fp32acc C[0]=0.00017452 checksum=47.80733877
+hgemm_cublas_fp16acc M=16384 N=16384 K=8192 warmup=10 iters=80 avg_ms=9.5868 TFLOP/s=458.7606
+hgemm_cublas_fp16acc C[0]=0.00017595 checksum=47.71967262
+
+--- Relative speedup vs hgemm_cublas_fp16acc ---
+hgemm_sm90_cooperative0.95x
+hgemm_cublas_fp32acc0.97x
+hgemm_cublas_fp16acc1.00x
+===== SWIZZLE=64 M=16384 N=16384 K=8192 warmup=10 iters=80 =====
+hgemm_sm90_cooperative M=16384 N=16384 K=8192 warmup=10 iters=80 avg_ms=10.8352 TFLOP/s=405.9051
+hgemm_sm90_cooperative C[0]=0.00017452 checksum=47.80733877
+hgemm_cublas_fp32acc M=16384 N=16384 K=8192 warmup=10 iters=80 avg_ms=9.7487 TFLOP/s=451.1435
+hgemm_cublas_fp32acc C[0]=0.00017452 checksum=47.80733877
+hgemm_cublas_fp16acc M=16384 N=16384 K=8192 warmup=10 iters=80 avg_ms=9.5620 TFLOP/s=459.9489
+hgemm_cublas_fp16acc C[0]=0.00017595 checksum=47.71967262
+
+--- Relative speedup vs hgemm_cublas_fp16acc ---
+hgemm_sm90_cooperative0.88x
+hgemm_cublas_fp32acc0.98x
+hgemm_cublas_fp16acc1.00x
+===== SWIZZLE=1 M=16384 N=16384 K=16384 warmup=10 iters=40 =====
+hgemm_sm90_cooperative M=16384 N=16384 K=16384 warmup=10 iters=40 avg_ms=34.4424 TFLOP/s=255.3853
+hgemm_sm90_cooperative C[0]=-0.00342751 checksum=34.83743984
+hgemm_cublas_fp32acc M=16384 N=16384 K=16384 warmup=10 iters=40 avg_ms=19.5924 TFLOP/s=448.9532
+hgemm_cublas_fp32acc C[0]=-0.00342751 checksum=34.83743984
+hgemm_cublas_fp16acc M=16384 N=16384 K=16384 warmup=10 iters=40 avg_ms=19.8174 TFLOP/s=443.8560
+hgemm_cublas_fp16acc C[0]=-0.00342751 checksum=35.12873799
+
+--- Relative speedup vs hgemm_cublas_fp16acc ---
+hgemm_sm90_cooperative0.58x
+hgemm_cublas_fp32acc1.01x
+hgemm_cublas_fp16acc1.00x
+===== SWIZZLE=2 M=16384 N=16384 K=16384 warmup=10 iters=40 =====
+hgemm_sm90_cooperative M=16384 N=16384 K=16384 warmup=10 iters=40 avg_ms=32.1203 TFLOP/s=273.8481
+hgemm_sm90_cooperative C[0]=-0.00342751 checksum=34.83743984
+hgemm_cublas_fp32acc M=16384 N=16384 K=16384 warmup=10 iters=40 avg_ms=19.3953 TFLOP/s=453.5162
+hgemm_cublas_fp32acc C[0]=-0.00342751 checksum=34.83743984
+hgemm_cublas_fp16acc M=16384 N=16384 K=16384 warmup=10 iters=40 avg_ms=19.7945 TFLOP/s=444.3703
+hgemm_cublas_fp16acc C[0]=-0.00342751 checksum=35.12873799
+
+--- Relative speedup vs hgemm_cublas_fp16acc ---
+hgemm_sm90_cooperative0.62x
+hgemm_cublas_fp32acc1.02x
+hgemm_cublas_fp16acc1.00x
+===== SWIZZLE=4 M=16384 N=16384 K=16384 warmup=10 iters=40 =====
+hgemm_sm90_cooperative M=16384 N=16384 K=16384 warmup=10 iters=40 avg_ms=30.1416 TFLOP/s=291.8258
+hgemm_sm90_cooperative C[0]=-0.00342751 checksum=34.83743984
+hgemm_cublas_fp32acc M=16384 N=16384 K=16384 warmup=10 iters=40 avg_ms=19.4181 TFLOP/s=452.9849
+hgemm_cublas_fp32acc C[0]=-0.00342751 checksum=34.83743984
+hgemm_cublas_fp16acc M=16384 N=16384 K=16384 warmup=10 iters=40 avg_ms=20.0883 TFLOP/s=437.8709
+hgemm_cublas_fp16acc C[0]=-0.00342751 checksum=35.12873799
+
+--- Relative speedup vs hgemm_cublas_fp16acc ---
+hgemm_sm90_cooperative0.67x
+hgemm_cublas_fp32acc1.03x
+hgemm_cublas_fp16acc1.00x
+===== SWIZZLE=8 M=16384 N=16384 K=16384 warmup=10 iters=40 =====
+hgemm_sm90_cooperative M=16384 N=16384 K=16384 warmup=10 iters=40 avg_ms=28.1578 TFLOP/s=312.3857
+hgemm_sm90_cooperative C[0]=-0.00342751 checksum=34.83743984
+hgemm_cublas_fp32acc M=16384 N=16384 K=16384 warmup=10 iters=40 avg_ms=19.5668 TFLOP/s=449.5406
+hgemm_cublas_fp32acc C[0]=-0.00342751 checksum=34.83743984
+hgemm_cublas_fp16acc M=16384 N=16384 K=16384 warmup=10 iters=40 avg_ms=19.9556 TFLOP/s=440.7836
+hgemm_cublas_fp16acc C[0]=-0.00342751 checksum=35.12873799
+
+--- Relative speedup vs hgemm_cublas_fp16acc ---
+hgemm_sm90_cooperative0.71x
+hgemm_cublas_fp32acc1.02x
+hgemm_cublas_fp16acc1.00x
+===== SWIZZLE=16 M=16384 N=16384 K=16384 warmup=10 iters=40 =====
+hgemm_sm90_cooperative M=16384 N=16384 K=16384 warmup=10 iters=40 avg_ms=21.7087 TFLOP/s=405.1882
+hgemm_sm90_cooperative C[0]=-0.00342751 checksum=34.83743984
+hgemm_cublas_fp32acc M=16384 N=16384 K=16384 warmup=10 iters=40 avg_ms=19.4627 TFLOP/s=451.9461
+hgemm_cublas_fp32acc C[0]=-0.00342751 checksum=34.83743984
+hgemm_cublas_fp16acc M=16384 N=16384 K=16384 warmup=10 iters=40 avg_ms=19.7709 TFLOP/s=444.9009
+hgemm_cublas_fp16acc C[0]=-0.00342751 checksum=35.12873799
+
+--- Relative speedup vs hgemm_cublas_fp16acc ---
+hgemm_sm90_cooperative0.91x
+hgemm_cublas_fp32acc1.02x
+hgemm_cublas_fp16acc1.00x
+===== SWIZZLE=32 M=16384 N=16384 K=16384 warmup=10 iters=40 =====
+hgemm_sm90_cooperative M=16384 N=16384 K=16384 warmup=10 iters=40 avg_ms=20.1864 TFLOP/s=435.7443
+hgemm_sm90_cooperative C[0]=-0.00342751 checksum=34.83743984
+hgemm_cublas_fp32acc M=16384 N=16384 K=16384 warmup=10 iters=40 avg_ms=19.5230 TFLOP/s=450.5498
+hgemm_cublas_fp32acc C[0]=-0.00342751 checksum=34.83743984
+hgemm_cublas_fp16acc M=16384 N=16384 K=16384 warmup=10 iters=40 avg_ms=19.8210 TFLOP/s=443.7772
+hgemm_cublas_fp16acc C[0]=-0.00342751 checksum=35.12873799
+
+--- Relative speedup vs hgemm_cublas_fp16acc ---
+hgemm_sm90_cooperative0.98x
+hgemm_cublas_fp32acc1.02x
+hgemm_cublas_fp16acc1.00x
+===== SWIZZLE=64 M=16384 N=16384 K=16384 warmup=10 iters=40 =====
+hgemm_sm90_cooperative M=16384 N=16384 K=16384 warmup=10 iters=40 avg_ms=20.7982 TFLOP/s=422.9255
+hgemm_sm90_cooperative C[0]=-0.00342751 checksum=34.83743984
+hgemm_cublas_fp32acc M=16384 N=16384 K=16384 warmup=10 iters=40 avg_ms=19.6001 TFLOP/s=448.7781
+hgemm_cublas_fp32acc C[0]=-0.00342751 checksum=34.83743984
+hgemm_cublas_fp16acc M=16384 N=16384 K=16384 warmup=10 iters=40 avg_ms=19.7641 TFLOP/s=445.0533
+hgemm_cublas_fp16acc C[0]=-0.00342751 checksum=35.12873799
+
+--- Relative speedup vs hgemm_cublas_fp16acc ---
+hgemm_sm90_cooperative0.95x
+hgemm_cublas_fp32acc1.01x
+hgemm_cublas_fp16acc1.00x
+===== SWIZZLE=1 M=24576 N=16384 K=8192 warmup=10 iters=60 =====
+hgemm_sm90_cooperative M=24576 N=16384 K=8192 warmup=10 iters=60 avg_ms=24.5846 TFLOP/s=268.3411
+hgemm_sm90_cooperative C[0]=-0.00268745 checksum=58.14346248
+hgemm_cublas_fp32acc M=24576 N=16384 K=8192 warmup=10 iters=60 avg_ms=15.1811 TFLOP/s=434.5575
+hgemm_cublas_fp32acc C[0]=-0.00268745 checksum=58.14346248
+hgemm_cublas_fp16acc M=24576 N=16384 K=8192 warmup=10 iters=60 avg_ms=14.7694 TFLOP/s=446.6714
+hgemm_cublas_fp16acc C[0]=-0.00268745 checksum=58.42595881
+
+--- Relative speedup vs hgemm_cublas_fp16acc ---
+hgemm_sm90_cooperative0.60x
+hgemm_cublas_fp32acc0.97x
+hgemm_cublas_fp16acc1.00x
+===== SWIZZLE=2 M=24576 N=16384 K=8192 warmup=10 iters=60 =====
+hgemm_sm90_cooperative M=24576 N=16384 K=8192 warmup=10 iters=60 avg_ms=22.9829 TFLOP/s=287.0425
+hgemm_sm90_cooperative C[0]=-0.00268745 checksum=58.14346248
+hgemm_cublas_fp32acc M=24576 N=16384 K=8192 warmup=10 iters=60 avg_ms=15.1443 TFLOP/s=435.6134
+hgemm_cublas_fp32acc C[0]=-0.00268745 checksum=58.14346248
+hgemm_cublas_fp16acc M=24576 N=16384 K=8192 warmup=10 iters=60 avg_ms=14.5952 TFLOP/s=452.0037
+hgemm_cublas_fp16acc C[0]=-0.00268745 checksum=58.42595881
+
+--- Relative speedup vs hgemm_cublas_fp16acc ---
+hgemm_sm90_cooperative0.64x
+hgemm_cublas_fp32acc0.96x
+hgemm_cublas_fp16acc1.00x
+===== SWIZZLE=4 M=24576 N=16384 K=8192 warmup=10 iters=60 =====
+hgemm_sm90_cooperative M=24576 N=16384 K=8192 warmup=10 iters=60 avg_ms=21.5673 TFLOP/s=305.8826
+hgemm_sm90_cooperative C[0]=-0.00268745 checksum=58.14346248
+hgemm_cublas_fp32acc M=24576 N=16384 K=8192 warmup=10 iters=60 avg_ms=15.3411 TFLOP/s=430.0253
+hgemm_cublas_fp32acc C[0]=-0.00268745 checksum=58.14346248
+hgemm_cublas_fp16acc M=24576 N=16384 K=8192 warmup=10 iters=60 avg_ms=14.7019 TFLOP/s=448.7230
+hgemm_cublas_fp16acc C[0]=-0.00268745 checksum=58.42595881
+
+--- Relative speedup vs hgemm_cublas_fp16acc ---
+hgemm_sm90_cooperative0.68x
+hgemm_cublas_fp32acc0.96x
+hgemm_cublas_fp16acc1.00x
+===== SWIZZLE=8 M=24576 N=16384 K=8192 warmup=10 iters=60 =====
+hgemm_sm90_cooperative M=24576 N=16384 K=8192 warmup=10 iters=60 avg_ms=20.6770 TFLOP/s=319.0542
+hgemm_sm90_cooperative C[0]=-0.00268745 checksum=58.14346248
+hgemm_cublas_fp32acc M=24576 N=16384 K=8192 warmup=10 iters=60 avg_ms=15.2261 TFLOP/s=433.2733
+hgemm_cublas_fp32acc C[0]=-0.00268745 checksum=58.14346248
+hgemm_cublas_fp16acc M=24576 N=16384 K=8192 warmup=10 iters=60 avg_ms=14.6655 TFLOP/s=449.8367
+hgemm_cublas_fp16acc C[0]=-0.00268745 checksum=58.42595881
+
+--- Relative speedup vs hgemm_cublas_fp16acc ---
+hgemm_sm90_cooperative0.71x
+hgemm_cublas_fp32acc0.96x
+hgemm_cublas_fp16acc1.00x
+===== SWIZZLE=16 M=24576 N=16384 K=8192 warmup=10 iters=60 =====
+hgemm_sm90_cooperative M=24576 N=16384 K=8192 warmup=10 iters=60 avg_ms=16.7991 TFLOP/s=392.7035
+hgemm_sm90_cooperative C[0]=-0.00268745 checksum=58.14346248
+hgemm_cublas_fp32acc M=24576 N=16384 K=8192 warmup=10 iters=60 avg_ms=15.3264 TFLOP/s=430.4380
+hgemm_cublas_fp32acc C[0]=-0.00268745 checksum=58.14346248
+hgemm_cublas_fp16acc M=24576 N=16384 K=8192 warmup=10 iters=60 avg_ms=14.6230 TFLOP/s=451.1427
+hgemm_cublas_fp16acc C[0]=-0.00268745 checksum=58.42595881
+
+--- Relative speedup vs hgemm_cublas_fp16acc ---
+hgemm_sm90_cooperative0.87x
+hgemm_cublas_fp32acc0.95x
+hgemm_cublas_fp16acc1.00x
+===== SWIZZLE=32 M=24576 N=16384 K=8192 warmup=10 iters=60 =====
+hgemm_sm90_cooperative M=24576 N=16384 K=8192 warmup=10 iters=60 avg_ms=15.3261 TFLOP/s=430.4480
+hgemm_sm90_cooperative C[0]=-0.00268745 checksum=58.14346248
+hgemm_cublas_fp32acc M=24576 N=16384 K=8192 warmup=10 iters=60 avg_ms=15.0550 TFLOP/s=438.1990
+hgemm_cublas_fp32acc C[0]=-0.00268745 checksum=58.14346248
+hgemm_cublas_fp16acc M=24576 N=16384 K=8192 warmup=10 iters=60 avg_ms=14.7514 TFLOP/s=447.2168
+hgemm_cublas_fp16acc C[0]=-0.00268745 checksum=58.42595881
+
+--- Relative speedup vs hgemm_cublas_fp16acc ---
+hgemm_sm90_cooperative0.96x
+hgemm_cublas_fp32acc0.98x
+hgemm_cublas_fp16acc1.00x
+===== SWIZZLE=64 M=24576 N=16384 K=8192 warmup=10 iters=60 =====
+hgemm_sm90_cooperative M=24576 N=16384 K=8192 warmup=10 iters=60 avg_ms=16.4340 TFLOP/s=401.4288
+hgemm_sm90_cooperative C[0]=-0.00268745 checksum=58.14346248
+hgemm_cublas_fp32acc M=24576 N=16384 K=8192 warmup=10 iters=60 avg_ms=15.1307 TFLOP/s=436.0049
+hgemm_cublas_fp32acc C[0]=-0.00268745 checksum=58.14346248
+hgemm_cublas_fp16acc M=24576 N=16384 K=8192 warmup=10 iters=60 avg_ms=14.7578 TFLOP/s=447.0236
+hgemm_cublas_fp16acc C[0]=-0.00268745 checksum=58.42595881
+
+--- Relative speedup vs hgemm_cublas_fp16acc ---
+hgemm_sm90_cooperative0.90x
+hgemm_cublas_fp32acc0.98x
+hgemm_cublas_fp16acc1.00x
+NVIDIA H800 PCIe, 1755 MHz, 1593 MHz, 40
+Wed Jun 17 03:34:18 CST 2026
