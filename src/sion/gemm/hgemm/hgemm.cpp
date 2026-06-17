@@ -2,7 +2,7 @@
 #include <felix/felix.hpp>
 namespace sion {
 torch::Tensor hgemm(const torch::Tensor &A, const torch::Tensor &B, float alpha,
-                    float beta) {
+                    float beta, const std::string &kernel_name) {
   TORCH_CHECK(A.is_cuda(), "A must be CUDA tensor");
   TORCH_CHECK(B.is_cuda(), "B must be CUDA tensor");
 
@@ -34,7 +34,7 @@ torch::Tensor hgemm(const torch::Tensor &A, const torch::Tensor &B, float alpha,
   auto status = felix::ampere_hgemm_launch(
       static_cast<uint32_t>(M), static_cast<uint32_t>(N),
       static_cast<uint32_t>(K), alpha, ptrA, ptrB, beta, ptrC, stream,
-      "cute_hgemm_128x128_nn");
+      kernel_name);
 
   TORCH_CHECK(status.ok(), "HGEMM launch failed: ", status.str());
 
@@ -42,7 +42,8 @@ torch::Tensor hgemm(const torch::Tensor &A, const torch::Tensor &B, float alpha,
 }
 
 torch::Tensor hgemm_nt(const torch::Tensor &A, const torch::Tensor &B,
-                       float alpha, float beta) {
+                       float alpha, float beta,
+                       const std::string &kernel_name) {
   TORCH_CHECK(A.is_cuda(), "A must be CUDA tensor");
   TORCH_CHECK(B.is_cuda(), "B must be CUDA tensor");
 
@@ -75,7 +76,7 @@ torch::Tensor hgemm_nt(const torch::Tensor &A, const torch::Tensor &B,
   auto status = felix::ampere_hgemm_launch(
       static_cast<uint32_t>(M), static_cast<uint32_t>(N),
       static_cast<uint32_t>(K), alpha, ptrA, ptrB, beta, ptrC, stream,
-      "cute_hgemm_128x128_nt");
+      kernel_name);
 
   TORCH_CHECK(status.ok(), "HGEMM NT launch failed: ", status.str());
 

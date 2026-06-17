@@ -3,7 +3,7 @@
 namespace sion {
 
 torch::Tensor sgemm(const torch::Tensor &A, const torch::Tensor &B, float alpha,
-                    float beta) {
+                    float beta, const std::string &kernel_name) {
   TORCH_CHECK(A.is_cuda(), "A must be CUDA tensor");
   TORCH_CHECK(B.is_cuda(), "B must be CUDA tensor");
   TORCH_CHECK(A.dtype() == torch::kFloat32, "A must be float32");
@@ -25,7 +25,7 @@ torch::Tensor sgemm(const torch::Tensor &A, const torch::Tensor &B, float alpha,
   cudaStream_t stream = at::cuda::getCurrentCUDAStream();
 
   auto status = felix::ampere_sgemm_launch(M, N, K, alpha, ptrA, ptrB, beta,
-                                           ptrC, stream);
+                                           ptrC, stream, kernel_name);
 
   TORCH_CHECK(status.ok(), "SGEMM launch failed: ", status.str());
 

@@ -44,7 +44,7 @@ FelixStatus cute_hgemm_128x128_nn_kernel_launch(uint32_t m, uint32_t n,
       Layout<Shape<Shape<_8, _16>, _8>, Stride<Stride<_1, _64>, _8>>{});
   auto sA = tile_to_shape(swizzle_atom_a, make_shape(bM, bK, bP));
   auto sB = tile_to_shape(swizzle_atom_b, make_shape(bN, bK, bP));
-  auto sC = make_layout(make_shape(bM, bN));
+  auto sC = make_layout(make_shape(bM, bN), LayoutRight{});
 
   // Define the thread layouts (static)
 
@@ -66,10 +66,15 @@ FelixStatus cute_hgemm_128x128_nn_kernel_launch(uint32_t m, uint32_t n,
 
   Copy_Atom<SM75_U16x8_LDSM_T, half_t> s2r_atom_B;
 
-  int smem_size = int(sizeof(
-      SharedStorage<cute::half_t, cute::half_t, decltype(sA), decltype(sB)>));
+  int smem_size = int(sizeof(CuteHgemmSharedStorage<
+                            cute::half_t, cute::half_t, decltype(sA),
+                            decltype(sB)>));
   dim3 dimBlock(size(mmaC));
-  dim3 dimGrid(size(ceil_div(M, bM)), size(ceil_div(N, bN)));
+  constexpr int kBlockSwizzle = 8;
+  int tile_m_count = size(ceil_div(M, bM));
+  int tile_n_count = size(ceil_div(N, bN));
+  dim3 dimGrid(tile_m_count * kBlockSwizzle,
+               (tile_n_count + kBlockSwizzle - 1) / kBlockSwizzle);
 
   auto kernel_fptr = cute_ampere_hgemm_16816<
       decltype(prob_shape), decltype(cta_tiler), cute::half_t, decltype(dA),
@@ -90,7 +95,7 @@ FelixStatus cute_hgemm_128x128_nn_kernel_launch(uint32_t m, uint32_t n,
 
   kernel_fptr<<<dimGrid, dimBlock, smem_size, stream>>>(
       prob_shape, cta_tiler, A, dA, sA, copyA, s2r_atom_A, B, dB, sB, copyB,
-      s2r_atom_B, C, dC, sC, mmaC, alpha, beta);
+      s2r_atom_B, C, dC, sC, mmaC, alpha, beta, kBlockSwizzle);
   err = cudaGetLastError();
   if (err != cudaSuccess) {
     return FelixStatus::make(FelixStatus::Type::KERNEL_LAUNCH_FAILED, err);

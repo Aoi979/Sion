@@ -1,3 +1,27 @@
-/build/
+# CMake/build output
+/build*/
+/cmake-build-*/
+/out/
+
+# Local tool caches
 /.cache/
+/.clangd/
+
+# Python build/runtime artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+/python/sion*.so
+
+# Generated reports and scratch output
 /draw/
+/*.log
+/sgemm_report.md
+/hgemm_tc_report.md
+
+# External kernel drop-in directories copied into src/felix.
+/my_kernel_sm80/
+/my_kernels_sm90/

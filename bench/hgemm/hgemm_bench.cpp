@@ -25,14 +25,30 @@ struct Args {
   std::string out = "hgemm_bench.md";
 };
 
+struct Alignment {
+  uint32_t m = 1;
+  uint32_t n = 1;
+  uint32_t k = 1;
+};
+
+static Alignment kernel_alignment(const std::string &kernel) {
+  if (kernel == "sm90_hgemm_128x256x64_cooperative") {
+    return {128, 512, 64};
+  }
+  return {128, 128, 64};
+}
+
 static void print_usage(const char *prog) {
   std::cout
       << "Usage: " << prog
       << " [--shape MxNxK] [--m M --n N --k K] [--alpha A --beta B]\n"
       << "       [--kernel NAME] [--warmup W --repeat R --iters I] [--out "
          "FILE]\n"
-      << "Note: current HGEMM benchmark requires M/N % 128 == 0 and K % 64 "
-         "== 0\n"
+      << "Known alignments:\n"
+      << "  cute_hgemm_128x128_nn, sm80_hgemm_128x128x64_*, "
+         "sm90_hgemm_128x128x64_pingpong: M/N % 128 == 0, K % 64 == 0\n"
+      << "  sm90_hgemm_128x256x64_cooperative: M % 128 == 0, N % 512 == 0, "
+         "K % 64 == 0\n"
       << "Example:\n"
       << "  " << prog
       << " --shape 2048x2048x2048 --kernel cute_hgemm_128x128_nn "
@@ -63,8 +79,8 @@ static std::string shape_to_string(const Shape &s) {
   return oss.str();
 }
 
-static bool is_aligned_shape(const Shape &s) {
-  return (s.m % 128u == 0u) && (s.n % 128u == 0u) && (s.k % 64u == 0u);
+static bool is_aligned_shape(const Shape &s, const Alignment &a) {
+  return (s.m % a.m == 0u) && (s.n % a.n == 0u) && (s.k % a.k == 0u);
 }
 
 static void fill_random(std::vector<half> &v) {
@@ -132,12 +148,14 @@ int main(int argc, char **argv) {
     args.shapes.push_back({2048, 2048, 2048});
   }
 
+  const Alignment align = kernel_alignment(args.kernel);
   for (const auto &shape : args.shapes) {
-    if (!is_aligned_shape(shape)) {
+    if (!is_aligned_shape(shape, align)) {
       std::cerr
           << "Unsupported shape " << shape_to_string(shape)
-          << ": current HGEMM benchmark requires M/N multiple of 128 and K "
-             "multiple of 64\n";
+          << " for kernel " << args.kernel << ": require M multiple of "
+          << align.m << ", N multiple of " << align.n << ", K multiple of "
+          << align.k << "\n";
       return 1;
     }
   }

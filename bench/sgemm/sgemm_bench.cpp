@@ -34,6 +34,14 @@ static Alignment kernel_alignment(const std::string &kernel) {
   if (kernel == "ampere_sgemm_128x128_nn_a1b0") {
     return {128, 128, 16};
   }
+  if (kernel == "sm80_sgemm_128x128x8_stage5" ||
+      kernel == "sm80_sgemm_128x128x8_stage5_one_cta_per_sm" ||
+      kernel == "sm80_sgemm_128x128x8_stage5_cutlass_warp_order" ||
+      kernel == "sm80_sgemm_128x128x8_stage5_cutlass_schedule" ||
+      kernel == "sm80_sgemm_128x128x8_stage5_cutlass_copy_schedule" ||
+      kernel == "sm80_sgemm_128x128x8_stage5_cutlass_sm80_mma_order") {
+    return {128, 128, 8};
+  }
   if (kernel == "cute_sgemm_64x64_nn" || kernel == "cute_sgemm_64x64_nn_swizzle" ||
       kernel == "ampere_sgemm_64x64_nn") {
     return {64, 64, 8};
@@ -46,9 +54,10 @@ static void print_usage(const char *prog) {
       << "Usage: " << prog
       << " [--shape MxNxK] [--m M --n N --k K] [--alpha A --beta B]\n"
       << "       [--kernel NAME] [--warmup W --repeat R --iters I] [--out FILE]\n"
-      << "Default kernel: ampere_sgemm_128x128_nn_a1b0\n"
+      << "Default kernel: cute_sgemm_64x64_nn\n"
       << "Known alignments:\n"
       << "  ampere_sgemm_128x128_nn_a1b0: M/N % 128 == 0, K % 16 == 0\n"
+      << "  sm80_sgemm_128x128x8_stage5*: M/N % 128 == 0, K % 8 == 0\n"
       << "  cute_sgemm_64x64_nn(_swizzle), ampere_sgemm_64x64_nn: M/N % 64 == 0, K % 8 == 0\n"
       << "Example:\n"
       << "  " << prog << " --kernel cute_sgemm_64x64_nn_swizzle "

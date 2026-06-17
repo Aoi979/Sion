@@ -1,15 +1,16 @@
+#pragma once
+
 #include <cute/tensor.hpp>
 
 template <class ElementA,
           class ElementB,
           class SmemLayoutA,
           class SmemLayoutB>
-struct SharedStorage
+struct CuteHgemmSharedStorage
 {
   cute::ArrayEngine<ElementA, cute::cosize_v<SmemLayoutA>> A;
   cute::ArrayEngine<ElementB, cute::cosize_v<SmemLayoutB>> B;
 };
-
 
 template <class ProblemShape, class CtaTiler, class TA, class AStride,
           class ASmemLayout, class TiledCopyA, class S2RAtomA, class TB,
@@ -25,8 +26,9 @@ __global__ static __launch_bounds__(decltype(size(
                                           BStride dB, BSmemLayout sB_layout,
                                           TiledCopyB copy_b,
                                           S2RAtomB s2r_atom_b, TC *C,
-                                          CStride dC, CSmemLayout, TiledMma mma,
-                                          Alpha alpha, Beta beta) {
+                                          CStride dC, CSmemLayout sC_layout, TiledMma mma,
+                                          Alpha alpha, Beta beta,
+                                          int kBlockSwizzle) {
   using namespace cute;
 
   // Preconditions
@@ -39,6 +41,7 @@ __global__ static __launch_bounds__(decltype(size(
   static_assert(is_static<ASmemLayout>::value);
   static_assert(is_static<BSmemLayout>::value);
   static_assert(is_static<CSmemLayout>::value);
+  static_assert(cosize_v<CSmemLayout> <= cosize_v<ASmemLayout>);
 
   CUTE_STATIC_ASSERT_V(size<0>(ASmemLayout{}) == size<0>(cta_tiler)); // BLK_M
   CUTE_STATIC_ASSERT_V(size<0>(CSmemLayout{}) == size<0>(cta_tiler)); // BLK_M
@@ -66,8 +69,27 @@ __global__ static __launch_bounds__(decltype(size(
   Tensor mC =
       make_tensor(make_gmem_ptr(C), select<0, 1>(shape_MNK), dC); // (M,N)
 
+  // Block swizzle: reorder CTA execution for better L2 cache locality.
+  // Positive kBlockSwizzle = row-major swizzle (reuse A rows).
+  // Negative kBlockSwizzle = column-major swizzle (reuse B cols).
+  int const tile_m_max = size(ceil_div(get<0>(shape_MNK), size<0>(cta_tiler)));
+  int const tile_n_max = size(ceil_div(get<1>(shape_MNK), size<1>(cta_tiler)));
+  int tile_m, tile_n;
+  if (kBlockSwizzle > 0) {
+    // Row-major: grid.x = tile_m_count * swizzle
+    tile_m = blockIdx.x / kBlockSwizzle;
+    tile_n = blockIdx.y * kBlockSwizzle + blockIdx.x % kBlockSwizzle;
+    if (tile_n >= tile_n_max) return;
+  } else {
+    // Column-major: grid.y = tile_n_count * swizzle
+    int const swiz = -kBlockSwizzle;
+    tile_n = blockIdx.y / swiz;
+    tile_m = blockIdx.x * swiz + blockIdx.y % swiz;
+    if (tile_m >= tile_m_max) return;
+  }
+
   // Get the appropriate blocks for this thread block
-  auto cta_coord = make_coord(blockIdx.x, blockIdx.y, _); // (m,n,k)
+  auto cta_coord = make_coord(tile_m, tile_n, _); // (m,n,k)
   Tensor gA = local_tile(mA, cta_tiler, cta_coord,
                          Step<_1, X, _1>{}); // (BLK_M,BLK_K,k)
   Tensor gB = local_tile(mB, cta_tiler, cta_coord,
@@ -77,8 +99,10 @@ __global__ static __launch_bounds__(decltype(size(
 
   // Shared memory buffers
   extern __shared__ char shared_memory[];
-  using SharedStorage = SharedStorage<TA, TB, ASmemLayout, BSmemLayout>;
-  SharedStorage &smem = *reinterpret_cast<SharedStorage *>(shared_memory);
+  using MainloopSharedStorage =
+      CuteHgemmSharedStorage<TA, TB, ASmemLayout, BSmemLayout>;
+  MainloopSharedStorage &smem =
+      *reinterpret_cast<MainloopSharedStorage *>(shared_memory);
   Tensor sA = make_tensor(make_smem_ptr(smem.A.begin()),
                           sA_layout); // (BLK_M,BLK_K,PIPE)
   Tensor sB = make_tensor(make_smem_ptr(smem.B.begin()),
@@ -108,18 +132,20 @@ __global__ static __launch_bounds__(decltype(size(
   auto K_PIPE_MAX = size<3>(tAsA);
 
   // Total count of tiles
-  int k_tile_count = size<3>(tAgA);
+  int K_TILE_MAX = size<3>(tAgA);
+  int k_tiles_to_issue = K_TILE_MAX;
+  int k_tiles_to_compute = K_TILE_MAX;
   // Current tile index in gmem to read from
   int k_tile_next = 0;
 
   // Start async loads for all pipes but the last
   CUTE_UNROLL
   for (int k_pipe = 0; k_pipe < K_PIPE_MAX - 1; ++k_pipe) {
-    copy(copy_a, tAgA(_, _, _, k_tile_next), tAsA(_, _, _, k_pipe));
-    copy(copy_b, tBgB(_, _, _, k_tile_next), tBsB(_, _, _, k_pipe));
-    cp_async_fence();
-    --k_tile_count;
-    if (k_tile_count > 0) {
+    if (k_tiles_to_issue > 0) {
+      copy(copy_a, tAgA(_, _, _, k_tile_next), tAsA(_, _, _, k_pipe));
+      copy(copy_b, tBgB(_, _, _, k_tile_next), tBsB(_, _, _, k_pipe));
+      cp_async_fence();
+      --k_tiles_to_issue;
       ++k_tile_next;
     }
   }
@@ -181,7 +207,7 @@ __global__ static __launch_bounds__(decltype(size(
   }
 
   CUTE_NO_UNROLL
-  while (k_tile_count > -(K_PIPE_MAX - 1)) {
+  while (k_tiles_to_compute > 0) {
     CUTE_UNROLL
     for (int k_block = 0; k_block < K_BLOCK_MAX; ++k_block) {
       if (k_block == K_BLOCK_MAX - 1) {
@@ -189,7 +215,7 @@ __global__ static __launch_bounds__(decltype(size(
         tXsA_p = tXsA(_, _, _, smem_pipe_read);
         tXsB_p = tXsB(_, _, _, smem_pipe_read);
 
-        // Commit the smem for smem_pipe_read
+        // Wait for the next tile to land in smem
         cp_async_wait<K_PIPE_MAX - 2>();
         __syncthreads();
       }
@@ -198,21 +224,29 @@ __global__ static __launch_bounds__(decltype(size(
       auto k_block_next = (k_block + Int<1>{}) % K_BLOCK_MAX; // static
       copy(s2r_atom_a, tXsA_p(_, _, k_block_next), tXrA(_, _, k_block_next));
       copy(s2r_atom_b, tXsB_p(_, _, k_block_next), tXrB(_, _, k_block_next));
-      // Copy gmem to smem before computing gemm on each k-pipe
-      if (k_block == 0) {
-        copy(copy_a, tAgA(_, _, _, k_tile_next),
-             tAsA(_, _, _, smem_pipe_write));
-        copy(copy_b, tBgB(_, _, _, k_tile_next),
-             tBsB(_, _, _, smem_pipe_write));
-        cp_async_fence();
 
-        // Advance the gmem tile
-        --k_tile_count;
-        if (k_tile_count > 0) {
+      // Spread cp.async across k-blocks to lower ldgsts density.
+      // A and B are issued in separate k-blocks; fence + pipe advance
+      // are unconditional so the pipeline drains correctly even after
+      // the last real tile has been issued.
+      if (k_block == 0) {
+        if (k_tiles_to_issue > 0) {
+          copy(copy_a, tAgA(_, _, _, k_tile_next),
+               tAsA(_, _, _, smem_pipe_write));
+        }
+      }
+      if (k_block == 1) {
+        if (k_tiles_to_issue > 0) {
+          copy(copy_b, tBgB(_, _, _, k_tile_next),
+               tBsB(_, _, _, smem_pipe_write));
+        }
+        cp_async_fence();
+        if (k_tiles_to_issue > 0) {
+          --k_tiles_to_issue;
           ++k_tile_next;
         }
-
-        // Advance the smem pipe
+      }
+      if (k_block == K_BLOCK_MAX - 2) {
         smem_pipe_write = smem_pipe_read;
         smem_pipe_read =
             (smem_pipe_read == K_PIPE_MAX - 1) ? 0 : smem_pipe_read + 1;
@@ -220,11 +254,51 @@ __global__ static __launch_bounds__(decltype(size(
       // Thread-level register gemm for k_block
       gemm(mma, tCrA(_, _, k_block), tCrB(_, _, k_block), tCrC);
     }
+    --k_tiles_to_compute;
   }
 
   //
   // Epilogue
   //
 
-  axpby(alpha, tCrC, beta, tCgC);
+  cp_async_wait<0>();
+  __syncthreads();
+
+  (void)alpha;
+  (void)beta;
+
+  // Reuse the mainloop A smem buffer: it is large enough for the 128x128
+  // half output tile and the mainloop no longer needs it.
+  Tensor sC = make_tensor(make_smem_ptr(reinterpret_cast<TC *>(smem.A.begin())),
+                          sC_layout); // (BLK_M,BLK_N)
+
+  auto r2s_copy = make_tiled_copy_C(cute::Copy_Atom<DefaultCopy, TC>{}, mma);
+  auto r2s_thr_copy = r2s_copy.get_slice(threadIdx.x);
+  Tensor tCrC_r2s = r2s_thr_copy.retile_S(tCrC);
+  Tensor tCsC_r2s = r2s_thr_copy.partition_D(sC);
+  copy(r2s_copy, tCrC_r2s, tCsC_r2s);
+
+  __syncthreads();
+
+  constexpr int kBlockM = decltype(size<0>(CSmemLayout{}))::value;
+  constexpr int kBlockN = decltype(size<1>(CSmemLayout{}))::value;
+  constexpr int kVecElems = 8; // 8 half values = 16 B
+  int const problem_n = int(get<1>(shape_MNK));
+  int const smem_stride_c = int(stride<0>(sC_layout));
+  // Swizzled tile indices already computed above; convert to pixel coords.
+  int const gmem_m = tile_m * kBlockM;
+  int const gmem_n = tile_n * kBlockN;
+  TC *sC_ptr = reinterpret_cast<TC *>(smem.A.begin());
+
+  CUTE_NO_UNROLL
+  for (int vec = int(threadIdx.x); vec < kBlockM * kBlockN / kVecElems;
+       vec += int(blockDim.x)) {
+    int const row = vec / (kBlockN / kVecElems);
+    int const col = (vec % (kBlockN / kVecElems)) * kVecElems;
+    uint4 const *src =
+        reinterpret_cast<uint4 const *>(&sC_ptr[row * smem_stride_c + col]);
+    uint4 *dst =
+        reinterpret_cast<uint4 *>(&C[(gmem_m + row) * problem_n + gmem_n + col]);
+    *dst = *src;
+  }
 }
