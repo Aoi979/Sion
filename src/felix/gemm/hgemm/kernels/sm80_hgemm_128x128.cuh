@@ -48,6 +48,72 @@ __device__ __forceinline__ uint32_t smem_addr(const void *ptr) {
       as_u32(tCrA[m][k_block][1][0][0]), as_u32(tCrA[m][k_block][1][1][0]),    \
       as_u32(tCrB[3][k_block][1][0][0]), as_u32(tCrB[3][k_block][1][1][0]))
 
+#define MMA_1_ROW_SLOT(m, k_slot)                                              \
+  mma::m16n8k16_f16f16f16_accum(                                               \
+      as_u32(tCrC[m][0][0][0][0]), as_u32(tCrC[m][0][0][1][0]),                \
+      as_u32(tCrA[m][(k_slot)][0][0][0]),                                      \
+      as_u32(tCrA[m][(k_slot)][0][1][0]),                                      \
+      as_u32(tCrA[m][(k_slot)][1][0][0]),                                      \
+      as_u32(tCrA[m][(k_slot)][1][1][0]),                                      \
+      as_u32(tCrB[0][(k_slot)][0][0][0]),                                      \
+      as_u32(tCrB[0][(k_slot)][0][1][0]));                                     \
+  mma::m16n8k16_f16f16f16_accum(                                               \
+      as_u32(tCrC[m][0][1][0][0]), as_u32(tCrC[m][0][1][1][0]),                \
+      as_u32(tCrA[m][(k_slot)][0][0][0]),                                      \
+      as_u32(tCrA[m][(k_slot)][0][1][0]),                                      \
+      as_u32(tCrA[m][(k_slot)][1][0][0]),                                      \
+      as_u32(tCrA[m][(k_slot)][1][1][0]),                                      \
+      as_u32(tCrB[0][(k_slot)][1][0][0]),                                      \
+      as_u32(tCrB[0][(k_slot)][1][1][0]));                                     \
+  mma::m16n8k16_f16f16f16_accum(                                               \
+      as_u32(tCrC[m][1][0][0][0]), as_u32(tCrC[m][1][0][1][0]),                \
+      as_u32(tCrA[m][(k_slot)][0][0][0]),                                      \
+      as_u32(tCrA[m][(k_slot)][0][1][0]),                                      \
+      as_u32(tCrA[m][(k_slot)][1][0][0]),                                      \
+      as_u32(tCrA[m][(k_slot)][1][1][0]),                                      \
+      as_u32(tCrB[1][(k_slot)][0][0][0]),                                      \
+      as_u32(tCrB[1][(k_slot)][0][1][0]));                                     \
+  mma::m16n8k16_f16f16f16_accum(                                               \
+      as_u32(tCrC[m][1][1][0][0]), as_u32(tCrC[m][1][1][1][0]),                \
+      as_u32(tCrA[m][(k_slot)][0][0][0]),                                      \
+      as_u32(tCrA[m][(k_slot)][0][1][0]),                                      \
+      as_u32(tCrA[m][(k_slot)][1][0][0]),                                      \
+      as_u32(tCrA[m][(k_slot)][1][1][0]),                                      \
+      as_u32(tCrB[1][(k_slot)][1][0][0]),                                      \
+      as_u32(tCrB[1][(k_slot)][1][1][0]));                                     \
+  mma::m16n8k16_f16f16f16_accum(                                               \
+      as_u32(tCrC[m][2][0][0][0]), as_u32(tCrC[m][2][0][1][0]),                \
+      as_u32(tCrA[m][(k_slot)][0][0][0]),                                      \
+      as_u32(tCrA[m][(k_slot)][0][1][0]),                                      \
+      as_u32(tCrA[m][(k_slot)][1][0][0]),                                      \
+      as_u32(tCrA[m][(k_slot)][1][1][0]),                                      \
+      as_u32(tCrB[2][(k_slot)][0][0][0]),                                      \
+      as_u32(tCrB[2][(k_slot)][0][1][0]));                                     \
+  mma::m16n8k16_f16f16f16_accum(                                               \
+      as_u32(tCrC[m][2][1][0][0]), as_u32(tCrC[m][2][1][1][0]),                \
+      as_u32(tCrA[m][(k_slot)][0][0][0]),                                      \
+      as_u32(tCrA[m][(k_slot)][0][1][0]),                                      \
+      as_u32(tCrA[m][(k_slot)][1][0][0]),                                      \
+      as_u32(tCrA[m][(k_slot)][1][1][0]),                                      \
+      as_u32(tCrB[2][(k_slot)][1][0][0]),                                      \
+      as_u32(tCrB[2][(k_slot)][1][1][0]));                                     \
+  mma::m16n8k16_f16f16f16_accum(                                               \
+      as_u32(tCrC[m][3][0][0][0]), as_u32(tCrC[m][3][0][1][0]),                \
+      as_u32(tCrA[m][(k_slot)][0][0][0]),                                      \
+      as_u32(tCrA[m][(k_slot)][0][1][0]),                                      \
+      as_u32(tCrA[m][(k_slot)][1][0][0]),                                      \
+      as_u32(tCrA[m][(k_slot)][1][1][0]),                                      \
+      as_u32(tCrB[3][(k_slot)][0][0][0]),                                      \
+      as_u32(tCrB[3][(k_slot)][0][1][0]));                                     \
+  mma::m16n8k16_f16f16f16_accum(                                               \
+      as_u32(tCrC[m][3][1][0][0]), as_u32(tCrC[m][3][1][1][0]),                \
+      as_u32(tCrA[m][(k_slot)][0][0][0]),                                      \
+      as_u32(tCrA[m][(k_slot)][0][1][0]),                                      \
+      as_u32(tCrA[m][(k_slot)][1][0][0]),                                      \
+      as_u32(tCrA[m][(k_slot)][1][1][0]),                                      \
+      as_u32(tCrB[3][(k_slot)][1][0][0]),                                      \
+      as_u32(tCrB[3][(k_slot)][1][1][0]))
+
 #define MMA_1_ROW_FP32(m)                                                      \
   mma::m16n8k16_f32f16f16f32_accum(                                            \
       tCrC[m][0][0][0][0], tCrC[m][0][0][0][1], tCrC[m][0][0][1][0],           \
@@ -290,6 +356,39 @@ __device__ __forceinline__ int offset_B(int n, int k) {
 
 } // namespace hgemm_smem
 
+namespace hgemm_epilogue {
+
+template <int StoreIter, int kCtaN, int kElementsPerAccess, int kThreads,
+          int kSmemStrideC>
+__device__ __forceinline__ void store_gmem_vec(half *gC, const half *sC,
+                                               int strideC) {
+  constexpr int kVecsPerRow = kCtaN / kElementsPerAccess;
+  int vec = threadIdx.x + StoreIter * kThreads;
+  int vec_row = vec / kVecsPerRow;
+  int vec_col = vec % kVecsPerRow;
+  uint4 *d_ptr = reinterpret_cast<uint4 *>(gC + vec_row * strideC +
+                                           vec_col * kElementsPerAccess);
+  const uint4 *s_ptr =
+      reinterpret_cast<const uint4 *>(sC + vec_row * kSmemStrideC +
+                                      vec_col * kElementsPerAccess);
+  *d_ptr = *s_ptr;
+}
+
+template <int StoreIter, int kStoreIterations, int kCtaN,
+          int kElementsPerAccess, int kThreads, int kSmemStrideC>
+__device__ __forceinline__ void store_gmem_unrolled(half *gC, const half *sC,
+                                                    int strideC) {
+  store_gmem_vec<StoreIter, kCtaN, kElementsPerAccess, kThreads, kSmemStrideC>(
+      gC, sC, strideC);
+  if constexpr (StoreIter + 1 < kStoreIterations) {
+    store_gmem_unrolled<StoreIter + 1, kStoreIterations, kCtaN,
+                        kElementsPerAccess, kThreads, kSmemStrideC>(
+        gC, sC, strideC);
+  }
+}
+
+} // namespace hgemm_epilogue
+
 template <int RowBlock>
 __device__ __forceinline__ void issue_cp_async_A(half *smem_A, const half *gA,
                                                  int tA_row, int tA_col,
@@ -323,6 +422,12 @@ template <typename Shape_MNK, int Stages> struct HgemmSharedStorage {
 struct shape_mnk {
   static constexpr int M = 128;
   static constexpr int N = 128;
+  static constexpr int K = 64;
+};
+
+struct shape_mnk_n256 {
+  static constexpr int M = 128;
+  static constexpr int N = 256;
   static constexpr int K = 64;
 };
 
@@ -716,16 +821,15 @@ __global__ void hgemm_f16f16f32_kernel(half *A, half *B, half *C, int M, int N,
 
   __syncthreads();
 
-  for (int vec = threadIdx.x; vec < kCtaM * kCtaN / kElementsPerAccess;
-       vec += blockDim.x) {
-    int vec_row = vec / (kCtaN / kElementsPerAccess);
-    int vec_col = vec % (kCtaN / kElementsPerAccess);
-    uint4 *d_ptr = reinterpret_cast<uint4 *>(gC + vec_row * StrideC +
-                                             vec_col * kElementsPerAccess);
-    uint4 *s_ptr = reinterpret_cast<uint4 *>(sC + vec_row * kSmemStrideC +
-                                             vec_col * kElementsPerAccess);
-    *d_ptr = *s_ptr;
-  }
+  constexpr int kEpilogueThreads = 128;
+  constexpr int kEpilogueVecCount = kCtaM * kCtaN / kElementsPerAccess;
+  static_assert(kEpilogueVecCount % kEpilogueThreads == 0,
+                "epilogue store schedule assumes full fixed-thread coverage");
+  constexpr int kEpilogueStoreIterations =
+      kEpilogueVecCount / kEpilogueThreads;
+  hgemm_epilogue::store_gmem_unrolled<0, kEpilogueStoreIterations, kCtaN,
+                                      kElementsPerAccess, kEpilogueThreads,
+                                      kSmemStrideC>(gC, sC, StrideC);
 }
 
 template <typename Shape_MNK = shape_mnk, int kStages, int kBlockSwizzle>
@@ -1114,30 +1218,450 @@ __global__ void hgemm_f16f16f16_kernel(half *A, half *B, half *C, int M, int N,
 
   __syncthreads();
 
-  for (int vec = threadIdx.x; vec < kCtaM * kCtaN / kElementsPerAccess;
-       vec += blockDim.x) {
-    int vec_row = vec / (kCtaN / kElementsPerAccess);
-    int vec_col = vec % (kCtaN / kElementsPerAccess);
-    uint4 *d_ptr = reinterpret_cast<uint4 *>(gC + vec_row * StrideC +
-                                             vec_col * kElementsPerAccess);
-    uint4 *s_ptr = reinterpret_cast<uint4 *>(sC + vec_row * kSmemStrideC +
-                                             vec_col * kElementsPerAccess);
-    *d_ptr = *s_ptr;
-  }
+  constexpr int kEpilogueThreads = 128;
+  constexpr int kEpilogueVecCount = kCtaM * kCtaN / kElementsPerAccess;
+  static_assert(kEpilogueVecCount % kEpilogueThreads == 0,
+                "epilogue store schedule assumes full fixed-thread coverage");
+  constexpr int kEpilogueStoreIterations =
+      kEpilogueVecCount / kEpilogueThreads;
+  hgemm_epilogue::store_gmem_unrolled<0, kEpilogueStoreIterations, kCtaN,
+                                      kElementsPerAccess, kEpilogueThreads,
+                                      kSmemStrideC>(gC, sC, StrideC);
 }
+namespace n256 {
+
+__device__ __forceinline__ int offset_B(int n, int k) {
+  int n_vec = (n >> 3) ^ (k & 7);
+  return (k << 8) + (n_vec << 3) + (n & 7);
+}
+
+template <int RowBlock>
+__device__ __forceinline__ void issue_cp_async_A(half *smem_A, const half *gA,
+                                                 int tA_row, int tA_col,
+                                                 int strideA) {
+  constexpr int kElementsPerAccess = 8;
+  int row = tA_row + RowBlock * 32;
+  int col = tA_col * kElementsPerAccess;
+  cp_async::cg<16>(&smem_A[hgemm_smem::offset_A(row, col)],
+                   &gA[row * strideA + col]);
+}
+
+template <int RowBlock>
+__device__ __forceinline__ void issue_cp_async_B(half *smem_B, const half *gB,
+                                                 int tB_row, int tB_col,
+                                                 int strideB) {
+  constexpr int kElementsPerAccess = 8;
+  int row = tB_row + RowBlock * 8;
+  int col = tB_col * kElementsPerAccess;
+  cp_async::cg<16>(&smem_B[n256::offset_B(col, row)], &gB[row * strideB + col]);
+}
+
+template <typename Shape_MNK = shape_mnk_n256, int kStages, int kBlockSwizzle>
+__global__ void hgemm_f16f16f16_128x256_kernel(half *A, half *B, half *C, int M,
+                                               int N, int K) {
+  constexpr int kCtaM = Shape_MNK::M; // 128
+  constexpr int kCtaN = Shape_MNK::N; // 256
+  constexpr int kCtaK = Shape_MNK::K; // 64
+  static_assert(kCtaM == 128 && kCtaN == 256 && kCtaK == 64,
+                "swizzled shared-memory layout assumes a 128x256x64 CTA");
+
+  constexpr int kWarpsM = 2;
+  constexpr int kWarpSize = 32;
+
+  constexpr int Tiled_MMA_M = 32;
+  constexpr int Tiled_MMA_N = 64;
+  constexpr int Tiled_MMA_K = 16;
+
+  extern __shared__ char shared_memory[];
+  using MainLoopSharedStorage = HgemmSharedStorage<Shape_MNK, kStages>;
+  MainLoopSharedStorage *smem =
+      reinterpret_cast<MainLoopSharedStorage *>(shared_memory);
+
+  int StrideA = K;
+  int StrideB = N;
+  int StrideC = N;
+
+  int const tile_m_max = (M + kCtaM - 1) / kCtaM;
+  int const tile_n_max = (N + kCtaN - 1) / kCtaN;
+
+  int tile_m = blockIdx.x / kBlockSwizzle;
+  int tile_n = blockIdx.y * kBlockSwizzle + blockIdx.x % kBlockSwizzle;
+  if (tile_m >= tile_m_max || tile_n >= tile_n_max) {
+    return;
+  }
+
+  const half *gA_base = A + tile_m * kCtaM * StrideA;
+  const half *gB_base = B + tile_n * kCtaN;
+
+  half *gC = C + tile_m * kCtaM * StrideC + tile_n * kCtaN;
+
+  int tid = threadIdx.x;
+  int warp_id = tid / kWarpSize;
+
+  int const K_TILE_MAX = K / kCtaK;
+  constexpr int K_BLOCK_MAX = kCtaK / Tiled_MMA_K;
+  constexpr int K_PIPE_MAX = kStages;
+  static_assert(K_BLOCK_MAX == 4,
+                "mainloop cp.async schedule assumes four MMA K-blocks");
+
+  constexpr int MMA_M = kCtaM / Tiled_MMA_M;
+  constexpr int MMA_N = kCtaN / Tiled_MMA_N;
+  constexpr int MMA_K = kCtaK / Tiled_MMA_K;
+  constexpr int kFragmentSlots = 2;
+  static_assert(MMA_K == K_BLOCK_MAX,
+                "fragment slots assume one logical slot per MMA K-block");
+
+  constexpr int Fragment = 2;
+  constexpr int CoreMatrix_M = 2;
+  constexpr int CoreMatrix_N = 2;
+  constexpr int CoreMatrix_K = 2;
+
+  constexpr int kElementsPerAccess = 8; // half, 16B
+
+  // (MMA_M, MMA_N, CoreMatrix_N, CoreMatrix_M, Fragment)
+  // :
+  // (8 * MMA_N, 8, 4, 2, 1)
+
+  half tCrC[MMA_M][MMA_N][CoreMatrix_N][CoreMatrix_M][Fragment];
+  half tCrA[MMA_M][kFragmentSlots][CoreMatrix_K][CoreMatrix_M][Fragment];
+  half tCrB[MMA_N][kFragmentSlots][CoreMatrix_N][CoreMatrix_K][Fragment];
+
+#pragma unroll
+  for (int m = 0; m < MMA_M; ++m) {
+#pragma unroll
+    for (int n = 0; n < MMA_N; ++n) {
+#pragma unroll
+      for (int cm_n = 0; cm_n < CoreMatrix_N; ++cm_n) {
+#pragma unroll
+        for (int cm_m = 0; cm_m < CoreMatrix_M; ++cm_m) {
+          as_u32(tCrC[m][n][cm_n][cm_m][0]) = 0;
+        }
+      }
+    }
+  }
+
+  int lane_id = tid % kWarpSize;
+
+  int tA_row = tid / (kCtaK / kElementsPerAccess); // 8
+  int tA_col = tid % (kCtaK / kElementsPerAccess);
+
+  int tB_row = tid / (kCtaN / kElementsPerAccess); // 32
+  int tB_col = tid % (kCtaN / kElementsPerAccess);
+
+  int k_tiles_to_issue = K_TILE_MAX;
+  int k_tiles_to_compute = K_TILE_MAX;
+  int k_tile_next = 0;
+
+#pragma unroll
+  for (int k_pipe = 0; k_pipe < K_PIPE_MAX - 1; ++k_pipe) {
+    const half *gA = gA_base + k_tile_next * kCtaK;
+    const half *gB = gB_base + k_tile_next * kCtaK * StrideB;
+    cp_async::cg<16>(
+        &smem->buffer[k_pipe].A[hgemm_smem::offset_A(
+            tA_row + 0 * 32, tA_col * kElementsPerAccess)],
+        &gA[(tA_row + 0 * 32) * StrideA + tA_col * kElementsPerAccess]);
+    cp_async::cg<16>(
+        &smem->buffer[k_pipe].A[hgemm_smem::offset_A(
+            tA_row + 1 * 32, tA_col * kElementsPerAccess)],
+        &gA[(tA_row + 1 * 32) * StrideA + tA_col * kElementsPerAccess]);
+    cp_async::cg<16>(
+        &smem->buffer[k_pipe].A[hgemm_smem::offset_A(
+            tA_row + 2 * 32, tA_col * kElementsPerAccess)],
+        &gA[(tA_row + 2 * 32) * StrideA + tA_col * kElementsPerAccess]);
+    cp_async::cg<16>(
+        &smem->buffer[k_pipe].A[hgemm_smem::offset_A(
+            tA_row + 3 * 32, tA_col * kElementsPerAccess)],
+        &gA[(tA_row + 3 * 32) * StrideA + tA_col * kElementsPerAccess]);
+
+    cp_async::cg<16>(
+        &smem->buffer[k_pipe].B[n256::offset_B(
+            tB_col * kElementsPerAccess, tB_row + 0 * 8)],
+        &gB[(tB_row + 0 * 8) * StrideB + tB_col * kElementsPerAccess]);
+    cp_async::cg<16>(
+        &smem->buffer[k_pipe].B[n256::offset_B(
+            tB_col * kElementsPerAccess, tB_row + 1 * 8)],
+        &gB[(tB_row + 1 * 8) * StrideB + tB_col * kElementsPerAccess]);
+    cp_async::cg<16>(
+        &smem->buffer[k_pipe].B[n256::offset_B(
+            tB_col * kElementsPerAccess, tB_row + 2 * 8)],
+        &gB[(tB_row + 2 * 8) * StrideB + tB_col * kElementsPerAccess]);
+    cp_async::cg<16>(
+        &smem->buffer[k_pipe].B[n256::offset_B(
+            tB_col * kElementsPerAccess, tB_row + 3 * 8)],
+        &gB[(tB_row + 3 * 8) * StrideB + tB_col * kElementsPerAccess]);
+    cp_async::cg<16>(
+        &smem->buffer[k_pipe].B[n256::offset_B(
+            tB_col * kElementsPerAccess, tB_row + 4 * 8)],
+        &gB[(tB_row + 4 * 8) * StrideB + tB_col * kElementsPerAccess]);
+    cp_async::cg<16>(
+        &smem->buffer[k_pipe].B[n256::offset_B(
+            tB_col * kElementsPerAccess, tB_row + 5 * 8)],
+        &gB[(tB_row + 5 * 8) * StrideB + tB_col * kElementsPerAccess]);
+    cp_async::cg<16>(
+        &smem->buffer[k_pipe].B[n256::offset_B(
+            tB_col * kElementsPerAccess, tB_row + 6 * 8)],
+        &gB[(tB_row + 6 * 8) * StrideB + tB_col * kElementsPerAccess]);
+    cp_async::cg<16>(
+        &smem->buffer[k_pipe].B[n256::offset_B(
+            tB_col * kElementsPerAccess, tB_row + 7 * 8)],
+        &gB[(tB_row + 7 * 8) * StrideB + tB_col * kElementsPerAccess]);
+
+    cp_async::commit_group();
+    --k_tiles_to_issue;
+    ++k_tile_next;
+  }
+
+  int smem_pipe_read = 0;
+  int smem_pipe_write = K_PIPE_MAX - 1;
+
+  int warp_m_id = warp_id % kWarpsM;
+  int warp_n_id = warp_id / kWarpsM;
+
+  int ldsmx4_row = lane_id % 16;
+  int ldsmx4_col = lane_id / 16;
+
+  int ldsmx4T_col = lane_id % 16;
+  int ldsmx4T_row = lane_id / 16;
+
+  if constexpr (K_BLOCK_MAX > 1) {
+    cp_async::wait_group<K_PIPE_MAX - 2>();
+    __syncthreads();
+
+    ldsm::x4<ldsm::N>(as_u32(tCrA[0][0][0][0][0]), as_u32(tCrA[0][0][0][1][0]),
+                      as_u32(tCrA[0][0][1][0][0]), as_u32(tCrA[0][0][1][1][0]),
+                      &smem->buffer[smem_pipe_read].A[hgemm_smem::offset_A(
+                          warp_m_id * 16 + ldsmx4_row + 0 * Tiled_MMA_M,
+                          0 * Tiled_MMA_K + ldsmx4_col * 8)]);
+    ldsm::x4<ldsm::N>(as_u32(tCrA[1][0][0][0][0]), as_u32(tCrA[1][0][0][1][0]),
+                      as_u32(tCrA[1][0][1][0][0]), as_u32(tCrA[1][0][1][1][0]),
+                      &smem->buffer[smem_pipe_read].A[hgemm_smem::offset_A(
+                          warp_m_id * 16 + ldsmx4_row + 1 * Tiled_MMA_M,
+                          0 * Tiled_MMA_K + ldsmx4_col * 8)]);
+    ldsm::x4<ldsm::N>(as_u32(tCrA[2][0][0][0][0]), as_u32(tCrA[2][0][0][1][0]),
+                      as_u32(tCrA[2][0][1][0][0]), as_u32(tCrA[2][0][1][1][0]),
+                      &smem->buffer[smem_pipe_read].A[hgemm_smem::offset_A(
+                          warp_m_id * 16 + ldsmx4_row + 2 * Tiled_MMA_M,
+                          0 * Tiled_MMA_K + ldsmx4_col * 8)]);
+    ldsm::x4<ldsm::N>(as_u32(tCrA[3][0][0][0][0]), as_u32(tCrA[3][0][0][1][0]),
+                      as_u32(tCrA[3][0][1][0][0]), as_u32(tCrA[3][0][1][1][0]),
+                      &smem->buffer[smem_pipe_read].A[hgemm_smem::offset_A(
+                          warp_m_id * 16 + ldsmx4_row + 3 * Tiled_MMA_M,
+                          0 * Tiled_MMA_K + ldsmx4_col * 8)]);
+    ldsm::x4<ldsm::T>(as_u32(tCrB[0][0][0][0][0]), as_u32(tCrB[0][0][0][1][0]),
+                      as_u32(tCrB[0][0][1][0][0]), as_u32(tCrB[0][0][1][1][0]),
+                      &smem->buffer[smem_pipe_read].B[n256::offset_B(
+                          warp_n_id * 8 + Tiled_MMA_N * 0 + ldsmx4T_row * 32,
+                          ldsmx4T_col + 0 * Tiled_MMA_K)]);
+    ldsm::x4<ldsm::T>(as_u32(tCrB[1][0][0][0][0]), as_u32(tCrB[1][0][0][1][0]),
+                      as_u32(tCrB[1][0][1][0][0]), as_u32(tCrB[1][0][1][1][0]),
+                      &smem->buffer[smem_pipe_read].B[n256::offset_B(
+                          warp_n_id * 8 + Tiled_MMA_N * 1 + ldsmx4T_row * 32,
+                          ldsmx4T_col + 0 * Tiled_MMA_K)]);
+    ldsm::x4<ldsm::T>(as_u32(tCrB[2][0][0][0][0]), as_u32(tCrB[2][0][0][1][0]),
+                      as_u32(tCrB[2][0][1][0][0]), as_u32(tCrB[2][0][1][1][0]),
+                      &smem->buffer[smem_pipe_read].B[n256::offset_B(
+                          warp_n_id * 8 + Tiled_MMA_N * 2 + ldsmx4T_row * 32,
+                          ldsmx4T_col + 0 * Tiled_MMA_K)]);
+    ldsm::x4<ldsm::T>(as_u32(tCrB[3][0][0][0][0]), as_u32(tCrB[3][0][0][1][0]),
+                      as_u32(tCrB[3][0][1][0][0]), as_u32(tCrB[3][0][1][1][0]),
+                      &smem->buffer[smem_pipe_read].B[n256::offset_B(
+                          warp_n_id * 8 + Tiled_MMA_N * 3 + ldsmx4T_row * 32,
+                          ldsmx4T_col + 0 * Tiled_MMA_K)]);
+  }
+  while (k_tiles_to_compute > 0) {
+#pragma unroll
+    for (int k_block = 0; k_block < K_BLOCK_MAX; ++k_block) {
+      int k_block_next = (k_block + 1) % K_BLOCK_MAX;
+      int k_block_slot = k_block & 1;
+      int k_block_next_slot = k_block_next & 1;
+      ldsm::x4<ldsm::N>(as_u32(tCrA[0][k_block_next_slot][0][0][0]),
+                        as_u32(tCrA[0][k_block_next_slot][0][1][0]),
+                        as_u32(tCrA[0][k_block_next_slot][1][0][0]),
+                        as_u32(tCrA[0][k_block_next_slot][1][1][0]),
+                        &smem->buffer[smem_pipe_read].A[hgemm_smem::offset_A(
+                            warp_m_id * 16 + ldsmx4_row + 0 * Tiled_MMA_M,
+                            k_block_next * Tiled_MMA_K + ldsmx4_col * 8)]);
+      ldsm::x4<ldsm::N>(as_u32(tCrA[1][k_block_next_slot][0][0][0]),
+                        as_u32(tCrA[1][k_block_next_slot][0][1][0]),
+                        as_u32(tCrA[1][k_block_next_slot][1][0][0]),
+                        as_u32(tCrA[1][k_block_next_slot][1][1][0]),
+                        &smem->buffer[smem_pipe_read].A[hgemm_smem::offset_A(
+                            warp_m_id * 16 + ldsmx4_row + 1 * Tiled_MMA_M,
+                            k_block_next * Tiled_MMA_K + ldsmx4_col * 8)]);
+      ldsm::x4<ldsm::N>(as_u32(tCrA[2][k_block_next_slot][0][0][0]),
+                        as_u32(tCrA[2][k_block_next_slot][0][1][0]),
+                        as_u32(tCrA[2][k_block_next_slot][1][0][0]),
+                        as_u32(tCrA[2][k_block_next_slot][1][1][0]),
+                        &smem->buffer[smem_pipe_read].A[hgemm_smem::offset_A(
+                            warp_m_id * 16 + ldsmx4_row + 2 * Tiled_MMA_M,
+                            k_block_next * Tiled_MMA_K + ldsmx4_col * 8)]);
+      ldsm::x4<ldsm::N>(as_u32(tCrA[3][k_block_next_slot][0][0][0]),
+                        as_u32(tCrA[3][k_block_next_slot][0][1][0]),
+                        as_u32(tCrA[3][k_block_next_slot][1][0][0]),
+                        as_u32(tCrA[3][k_block_next_slot][1][1][0]),
+                        &smem->buffer[smem_pipe_read].A[hgemm_smem::offset_A(
+                            warp_m_id * 16 + ldsmx4_row + 3 * Tiled_MMA_M,
+                            k_block_next * Tiled_MMA_K + ldsmx4_col * 8)]);
+      ldsm::x4<ldsm::T>(as_u32(tCrB[0][k_block_next_slot][0][0][0]),
+                        as_u32(tCrB[0][k_block_next_slot][0][1][0]),
+                        as_u32(tCrB[0][k_block_next_slot][1][0][0]),
+                        as_u32(tCrB[0][k_block_next_slot][1][1][0]),
+                        &smem->buffer[smem_pipe_read].B[n256::offset_B(
+                            warp_n_id * 8 + Tiled_MMA_N * 0 + ldsmx4T_row * 32,
+                            ldsmx4T_col + k_block_next * Tiled_MMA_K)]);
+      ldsm::x4<ldsm::T>(as_u32(tCrB[1][k_block_next_slot][0][0][0]),
+                        as_u32(tCrB[1][k_block_next_slot][0][1][0]),
+                        as_u32(tCrB[1][k_block_next_slot][1][0][0]),
+                        as_u32(tCrB[1][k_block_next_slot][1][1][0]),
+                        &smem->buffer[smem_pipe_read].B[n256::offset_B(
+                            warp_n_id * 8 + Tiled_MMA_N * 1 + ldsmx4T_row * 32,
+                            ldsmx4T_col + k_block_next * Tiled_MMA_K)]);
+      ldsm::x4<ldsm::T>(as_u32(tCrB[2][k_block_next_slot][0][0][0]),
+                        as_u32(tCrB[2][k_block_next_slot][0][1][0]),
+                        as_u32(tCrB[2][k_block_next_slot][1][0][0]),
+                        as_u32(tCrB[2][k_block_next_slot][1][1][0]),
+                        &smem->buffer[smem_pipe_read].B[n256::offset_B(
+                            warp_n_id * 8 + Tiled_MMA_N * 2 + ldsmx4T_row * 32,
+                            ldsmx4T_col + k_block_next * Tiled_MMA_K)]);
+      ldsm::x4<ldsm::T>(as_u32(tCrB[3][k_block_next_slot][0][0][0]),
+                        as_u32(tCrB[3][k_block_next_slot][0][1][0]),
+                        as_u32(tCrB[3][k_block_next_slot][1][0][0]),
+                        as_u32(tCrB[3][k_block_next_slot][1][1][0]),
+                        &smem->buffer[smem_pipe_read].B[n256::offset_B(
+                            warp_n_id * 8 + Tiled_MMA_N * 3 + ldsmx4T_row * 32,
+                            ldsmx4T_col + k_block_next * Tiled_MMA_K)]);
+
+      MMA_1_ROW_SLOT(0, k_block_slot);
+      MMA_1_ROW_SLOT(1, k_block_slot);
+      MMA_1_ROW_SLOT(2, k_block_slot);
+      MMA_1_ROW_SLOT(3, k_block_slot);
+
+      if (k_tiles_to_issue > 0) {
+        const half *gA = gA_base + k_tile_next * kCtaK;
+        const half *gB = gB_base + k_tile_next * kCtaK * StrideB;
+        half *sA = smem->buffer[smem_pipe_write].A;
+        half *sB = smem->buffer[smem_pipe_write].B;
+
+        if (k_block == 0) {
+          n256::issue_cp_async_A<0>(sA, gA, tA_row, tA_col, StrideA);
+          n256::issue_cp_async_B<0>(sB, gB, tB_row, tB_col, StrideB);
+          n256::issue_cp_async_B<1>(sB, gB, tB_row, tB_col, StrideB);
+        } else if (k_block == 1) {
+          n256::issue_cp_async_A<1>(sA, gA, tA_row, tA_col, StrideA);
+          n256::issue_cp_async_B<2>(sB, gB, tB_row, tB_col, StrideB);
+          n256::issue_cp_async_B<3>(sB, gB, tB_row, tB_col, StrideB);
+        } else if (k_block == 2) {
+          n256::issue_cp_async_A<2>(sA, gA, tA_row, tA_col, StrideA);
+          n256::issue_cp_async_B<4>(sB, gB, tB_row, tB_col, StrideB);
+          n256::issue_cp_async_B<5>(sB, gB, tB_row, tB_col, StrideB);
+          n256::issue_cp_async_A<3>(sA, gA, tA_row, tA_col, StrideA);
+          n256::issue_cp_async_B<6>(sB, gB, tB_row, tB_col, StrideB);
+          n256::issue_cp_async_B<7>(sB, gB, tB_row, tB_col, StrideB);
+        }
+      }
+
+      if (k_block == K_BLOCK_MAX - 2) {
+        cp_async::commit_group();
+        if (k_tiles_to_issue > 0) {
+          --k_tiles_to_issue;
+          ++k_tile_next;
+        }
+        smem_pipe_write = smem_pipe_read;
+        smem_pipe_read =
+            (smem_pipe_read == K_PIPE_MAX - 1) ? 0 : smem_pipe_read + 1;
+
+        if (k_tiles_to_compute <= K_PIPE_MAX - 1) {
+          cp_async::wait_group<0>();
+        } else {
+          cp_async::wait_group<K_PIPE_MAX - 2>();
+        }
+        __syncthreads();
+      }
+    }
+    --k_tiles_to_compute;
+  }
+
+  //
+  // Epilogue
+  //
+
+  cp_async::wait_all();
+  __syncthreads();
+  half *sC = reinterpret_cast<half *>(shared_memory);
+
+  int core_matrix_row = lane_id / 4;
+  int core_matrix_col = lane_id % 4;
+
+  constexpr int kSmemStrideC = 264;
+#pragma unroll
+  for (int m = 0; m < MMA_M; ++m) {
+    for (int n = 0; n < MMA_N; ++n) {
+      *reinterpret_cast<uint32_t *>(
+          &sC[(m * Tiled_MMA_M + warp_m_id * 16 + 0 * 8 + core_matrix_row) *
+                  kSmemStrideC +
+              n * Tiled_MMA_N + warp_n_id * 8 + 0 * 32 + core_matrix_col * 2]) =
+          as_u32(tCrC[m][n][0][0][0]);
+      *reinterpret_cast<uint32_t *>(
+          &sC[(m * Tiled_MMA_M + warp_m_id * 16 + 1 * 8 + core_matrix_row) *
+                  kSmemStrideC +
+              n * Tiled_MMA_N + warp_n_id * 8 + 0 * 32 + core_matrix_col * 2]) =
+          as_u32(tCrC[m][n][0][1][0]);
+
+      *reinterpret_cast<uint32_t *>(
+          &sC[(m * Tiled_MMA_M + warp_m_id * 16 + 0 * 8 + core_matrix_row) *
+                  kSmemStrideC +
+              n * Tiled_MMA_N + warp_n_id * 8 + 1 * 32 + core_matrix_col * 2]) =
+          as_u32(tCrC[m][n][1][0][0]);
+      *reinterpret_cast<uint32_t *>(
+          &sC[(m * Tiled_MMA_M + warp_m_id * 16 + 1 * 8 + core_matrix_row) *
+                  kSmemStrideC +
+              n * Tiled_MMA_N + warp_n_id * 8 + 1 * 32 + core_matrix_col * 2]) =
+          as_u32(tCrC[m][n][1][1][0]);
+    }
+  }
+
+  __syncthreads();
+
+  constexpr int kEpilogueThreads = 256;
+  constexpr int kEpilogueVecCount = kCtaM * kCtaN / kElementsPerAccess;
+  static_assert(kEpilogueVecCount % kEpilogueThreads == 0,
+                "epilogue store schedule assumes full fixed-thread coverage");
+  constexpr int kEpilogueStoreIterations =
+      kEpilogueVecCount / kEpilogueThreads;
+  hgemm_epilogue::store_gmem_unrolled<0, kEpilogueStoreIterations, kCtaN,
+                                      kElementsPerAccess, kEpilogueThreads,
+                                      kSmemStrideC>(gC, sC, StrideC);
+}
+
+} // namespace n256
 
 namespace sm80_hgemm {
 
 constexpr int kStages = 3;
 constexpr int kBlockSwizzle = 8;
+constexpr int kAutoBlockSwizzle = 0;
 constexpr int kThreads = 128;
+constexpr int kThreadsN256 = 256;
 constexpr int kSharedStorageBytes =
     sizeof(HgemmSharedStorage<shape_mnk, kStages>);
+constexpr int kSharedStorageBytesN256 =
+    sizeof(HgemmSharedStorage<shape_mnk_n256, kStages>);
 
+inline int select_hgemm_128x128x64_fp16acc_block_swizzle(int M, int N, int K) {
+  (void)M;
+  (void)K;
+  int const tile_n_count = (N + shape_mnk::N - 1) / shape_mnk::N;
+  if (tile_n_count <= 16) {
+    return 1;
+  }
+  return kBlockSwizzle;
+}
+
+template <int BlockSwizzle>
 inline cudaError_t launch_hgemm_128x128x64_fp16acc(half *A, half *B, half *C,
                                                    int M, int N, int K,
                                                    cudaStream_t stream = 0) {
-  auto kernel_fptr = hgemm_f16f16f16_kernel<shape_mnk, kStages, kBlockSwizzle>;
+  auto kernel_fptr = hgemm_f16f16f16_kernel<shape_mnk, kStages, BlockSwizzle>;
 
   cudaError_t err = cudaFuncSetAttribute(
       kernel_fptr, cudaFuncAttributeMaxDynamicSharedMemorySize,
@@ -1153,11 +1677,119 @@ inline cudaError_t launch_hgemm_128x128x64_fp16acc(half *A, half *B, half *C,
   int tile_m_count = M / shape_mnk::M;
   int tile_n_count = N / shape_mnk::N;
   dim3 block(kThreads);
-  dim3 grid(tile_m_count * kBlockSwizzle,
-            (tile_n_count + kBlockSwizzle - 1) / kBlockSwizzle);
+  dim3 grid(tile_m_count * BlockSwizzle,
+            (tile_n_count + BlockSwizzle - 1) / BlockSwizzle);
 
   kernel_fptr<<<grid, block, kSharedStorageBytes, stream>>>(A, B, C, M, N, K);
   return cudaGetLastError();
+}
+
+inline cudaError_t launch_hgemm_128x128x64_fp16acc(half *A, half *B, half *C,
+                                                   int M, int N, int K,
+                                                   int block_swizzle,
+                                                   cudaStream_t stream = 0) {
+  if (block_swizzle == kAutoBlockSwizzle) {
+    block_swizzle = select_hgemm_128x128x64_fp16acc_block_swizzle(M, N, K);
+  }
+  switch (block_swizzle) {
+  case 1:
+    return launch_hgemm_128x128x64_fp16acc<1>(A, B, C, M, N, K, stream);
+  case 2:
+    return launch_hgemm_128x128x64_fp16acc<2>(A, B, C, M, N, K, stream);
+  case 4:
+    return launch_hgemm_128x128x64_fp16acc<4>(A, B, C, M, N, K, stream);
+  case 8:
+    return launch_hgemm_128x128x64_fp16acc<8>(A, B, C, M, N, K, stream);
+  case 16:
+    return launch_hgemm_128x128x64_fp16acc<16>(A, B, C, M, N, K, stream);
+  case 32:
+    return launch_hgemm_128x128x64_fp16acc<32>(A, B, C, M, N, K, stream);
+  case 64:
+    return launch_hgemm_128x128x64_fp16acc<64>(A, B, C, M, N, K, stream);
+  default:
+    return cudaErrorInvalidValue;
+  }
+}
+
+inline cudaError_t launch_hgemm_128x128x64_fp16acc(half *A, half *B, half *C,
+                                                   int M, int N, int K,
+                                                   cudaStream_t stream = 0) {
+  return launch_hgemm_128x128x64_fp16acc(A, B, C, M, N, K, kAutoBlockSwizzle,
+                                         stream);
+}
+
+inline int select_hgemm_128x256x64_fp16acc_block_swizzle(int M, int N, int K) {
+  (void)M;
+  (void)K;
+  int const tile_n_count = (N + shape_mnk_n256::N - 1) / shape_mnk_n256::N;
+  if (tile_n_count <= 16) {
+    return 1;
+  }
+  return kBlockSwizzle;
+}
+
+template <int BlockSwizzle>
+inline cudaError_t launch_hgemm_128x256x64_fp16acc(half *A, half *B, half *C,
+                                                   int M, int N, int K,
+                                                   cudaStream_t stream = 0) {
+  auto kernel_fptr =
+      n256::hgemm_f16f16f16_128x256_kernel<shape_mnk_n256, kStages,
+                                           BlockSwizzle>;
+
+  cudaError_t err = cudaFuncSetAttribute(
+      kernel_fptr, cudaFuncAttributeMaxDynamicSharedMemorySize,
+      kSharedStorageBytesN256);
+  if (err != cudaSuccess)
+    return err;
+
+  err = cudaFuncSetAttribute(
+      kernel_fptr, cudaFuncAttributePreferredSharedMemoryCarveout, 100);
+  if (err != cudaSuccess)
+    return err;
+
+  int tile_m_count = M / shape_mnk_n256::M;
+  int tile_n_count = N / shape_mnk_n256::N;
+  dim3 block(kThreadsN256);
+  dim3 grid(tile_m_count * BlockSwizzle,
+            (tile_n_count + BlockSwizzle - 1) / BlockSwizzle);
+
+  kernel_fptr<<<grid, block, kSharedStorageBytesN256, stream>>>(A, B, C, M, N,
+                                                                K);
+  return cudaGetLastError();
+}
+
+inline cudaError_t launch_hgemm_128x256x64_fp16acc(half *A, half *B, half *C,
+                                                   int M, int N, int K,
+                                                   int block_swizzle,
+                                                   cudaStream_t stream = 0) {
+  if (block_swizzle == kAutoBlockSwizzle) {
+    block_swizzle = select_hgemm_128x256x64_fp16acc_block_swizzle(M, N, K);
+  }
+  switch (block_swizzle) {
+  case 1:
+    return launch_hgemm_128x256x64_fp16acc<1>(A, B, C, M, N, K, stream);
+  case 2:
+    return launch_hgemm_128x256x64_fp16acc<2>(A, B, C, M, N, K, stream);
+  case 4:
+    return launch_hgemm_128x256x64_fp16acc<4>(A, B, C, M, N, K, stream);
+  case 8:
+    return launch_hgemm_128x256x64_fp16acc<8>(A, B, C, M, N, K, stream);
+  case 16:
+    return launch_hgemm_128x256x64_fp16acc<16>(A, B, C, M, N, K, stream);
+  case 32:
+    return launch_hgemm_128x256x64_fp16acc<32>(A, B, C, M, N, K, stream);
+  case 64:
+    return launch_hgemm_128x256x64_fp16acc<64>(A, B, C, M, N, K, stream);
+  default:
+    return cudaErrorInvalidValue;
+  }
+}
+
+inline cudaError_t launch_hgemm_128x256x64_fp16acc(half *A, half *B, half *C,
+                                                   int M, int N, int K,
+                                                   cudaStream_t stream = 0) {
+  return launch_hgemm_128x256x64_fp16acc(A, B, C, M, N, K, kAutoBlockSwizzle,
+                                         stream);
 }
 
 inline cudaError_t launch_hgemm_128x128x64_fp32acc(half *A, half *B, half *C,
