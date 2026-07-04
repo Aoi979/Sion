@@ -12,8 +12,8 @@ SION_BIN="${SION_BIN:-${BIN_DIR}/sgemm_bench}"
 OUT_DIR="${OUT_DIR:-${BIN_DIR}/bench_results}"
 OUT_MD="${OUT_MD:-${OUT_DIR}/sgemm_kernel_compare.md}"
 
-KERNEL_A="${KERNEL_A:-cute_sgemm_64x64_nn}"
-KERNEL_B="${KERNEL_B:-cute_sgemm_64x64_nn_swizzle}"
+KERNEL_A="${KERNEL_A:-sm80_sgemm_f32_nn_m64n64k8_cute}"
+KERNEL_B="${KERNEL_B:-sm80_sgemm_f32_nn_m64n64k8_cute_swizzle}"
 
 WARMUP="${WARMUP:-5}"
 REPEAT="${REPEAT:-20}"

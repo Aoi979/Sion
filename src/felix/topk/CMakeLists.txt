@@ -1,3 +1,3 @@
 target_sources(felix PRIVATE
-    sorting_radix_select_kernel_launch.cu
+    launchers/cuda_topk_f32_radix_select.cu
 )

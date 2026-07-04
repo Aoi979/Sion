@@ -8,32 +8,24 @@ template <int HEAD_DIM>
 void launch_flash_attn_mma_stages_1D(const torch::Tensor &Q,
                                      const torch::Tensor &K,
                                      const torch::Tensor &V, torch::Tensor &O) {
-  TORCH_CHECK(Q.is_cuda() && K.is_cuda() && V.is_cuda() && O.is_cuda(),
-              "All tensors must be CUDA tensors");
-  TORCH_CHECK(Q.dtype() == torch::kHalf && K.dtype() == torch::kHalf &&
-                  V.dtype() == torch::kHalf && O.dtype() == torch::kHalf,
-              "All tensors must be half");
-  TORCH_CHECK(Q.dim() == 4 && K.dim() == 4 && V.dim() == 4 && O.dim() == 4,
-              "All tensors must be 4D");
-
   half *dQ = reinterpret_cast<half *>(Q.data_ptr<at::Half>());
   half *dK = reinterpret_cast<half *>(K.data_ptr<at::Half>());
   half *dV = reinterpret_cast<half *>(V.data_ptr<at::Half>());
   half *dO = reinterpret_cast<half *>(O.data_ptr<at::Half>());
 
+  const at::cuda::OptionalCUDAGuard device_guard(Q.device());
   at::cuda::CUDAStream current_stream = at::cuda::getCurrentCUDAStream();
   cudaStream_t stream = current_stream.stream();
 
-  auto batch_size = Q.size(0);
-  auto heads = Q.size(1);
-  auto QKV_seqlen = Q.size(2);
+  auto batch_size = detail::checked_u32(Q.size(0), "batch_size");
+  auto heads = detail::checked_u32(Q.size(1), "heads");
+  auto QKV_seqlen = detail::checked_u32(Q.size(2), "seq_len");
   // TODO: support tail tiles when seq_len is not divisible by Br (Br=64).
   TORCH_CHECK((QKV_seqlen % 64) == 0,
               "flash_attention: seq_len must be divisible by 64 for the "
               "current kernel; tail handling is not implemented yet");
-  auto status = felix::ampere_flash_attn_launch<HEAD_DIM, 64>(
-      dQ, dK, dV, dO, heads, batch_size, QKV_seqlen, stream,
-      "ampere_flash_attn_mma16168_64_1D_warp_tiling");
+  auto status = felix::flash_attn_f16_launch<HEAD_DIM, 64>(
+      dQ, dK, dV, dO, heads, batch_size, QKV_seqlen, stream);
 
   TORCH_CHECK(status.ok(),
               "flash_attention: kernel launch failed: ", status.str());
@@ -44,6 +36,21 @@ void launch_flash_attn_mma_stages_1D(const torch::Tensor &Q,
 torch::Tensor flash_attention(const torch::Tensor &query,
                               const torch::Tensor &key,
                               const torch::Tensor &value) {
+  TORCH_CHECK(query.is_cuda() && key.is_cuda() && value.is_cuda(),
+              "query, key and value must be CUDA tensors");
+  TORCH_CHECK(query.device() == key.device() && query.device() == value.device(),
+              "query, key and value must be on the same CUDA device");
+  TORCH_CHECK(query.dtype() == torch::kHalf && key.dtype() == torch::kHalf &&
+                  value.dtype() == torch::kHalf,
+              "query, key and value must be float16");
+  TORCH_CHECK(query.dim() == 4 && key.dim() == 4 && value.dim() == 4,
+              "query, key and value must be 4D tensors");
+  TORCH_CHECK(query.sizes() == key.sizes() && query.sizes() == value.sizes(),
+              "query, key and value must have the same shape");
+  TORCH_CHECK(query.is_contiguous(), "query must be contiguous");
+  TORCH_CHECK(key.is_contiguous(), "key must be contiguous");
+  TORCH_CHECK(value.is_contiguous(), "value must be contiguous");
+
   auto B = query.size(0);
   auto H = query.size(1);
   auto N = query.size(2);

@@ -1,85 +1,78 @@
 #include "../../common.hpp"
 #include <felix/felix.hpp>
 namespace sion {
-torch::Tensor hgemm(const torch::Tensor &A, const torch::Tensor &B, float alpha,
-                    float beta, const std::string &kernel_name) {
-  TORCH_CHECK(A.is_cuda(), "A must be CUDA tensor");
-  TORCH_CHECK(B.is_cuda(), "B must be CUDA tensor");
+namespace {
 
+torch::Tensor hgemm_impl(const torch::Tensor &A, const torch::Tensor &B,
+                         float alpha, float beta,
+                         const std::string *kernel_name, bool nt_layout) {
+  detail::check_same_cuda_device(A, B, "A", "B");
   TORCH_CHECK(A.dtype() == torch::kFloat16, "A must be float16");
   TORCH_CHECK(B.dtype() == torch::kFloat16, "B must be float16");
-
   TORCH_CHECK(A.dim() == 2, "A must be 2D");
   TORCH_CHECK(B.dim() == 2, "B must be 2D");
-
   TORCH_CHECK(A.is_contiguous(), "A must be contiguous");
   TORCH_CHECK(B.is_contiguous(), "B must be contiguous");
 
-  int64_t M = A.size(0);
-  int64_t K = A.size(1);
-  int64_t N = B.size(1);
+  const int64_t m = A.size(0);
+  const int64_t k = A.size(1);
+  const int64_t n = nt_layout ? B.size(0) : B.size(1);
 
-  TORCH_CHECK(B.size(0) == K, "B.size(0) must match A.size(1)");
+  if (nt_layout) {
+    TORCH_CHECK(B.size(1) == k,
+                "B.size(1) must match A.size(1) for NT GEMM");
+  } else {
+    TORCH_CHECK(B.size(0) == k, "B.size(0) must match A.size(1)");
+  }
 
-  auto C = torch::empty({M, N}, A.options());
+  uint32_t M = detail::checked_u32(m, "M");
+  uint32_t K = detail::checked_u32(k, "K");
+  uint32_t N = detail::checked_u32(n, "N");
+
+  auto C = beta == 0.0f ? torch::empty({m, n}, A.options())
+                        : torch::zeros({m, n}, A.options());
 
   const __half *ptrA = reinterpret_cast<const __half *>(A.data_ptr<at::Half>());
-
   const __half *ptrB = reinterpret_cast<const __half *>(B.data_ptr<at::Half>());
-
   __half *ptrC = reinterpret_cast<__half *>(C.data_ptr<at::Half>());
 
+  const at::cuda::OptionalCUDAGuard device_guard(A.device());
   cudaStream_t stream = at::cuda::getCurrentCUDAStream();
 
-  auto status = felix::ampere_hgemm_launch(
-      static_cast<uint32_t>(M), static_cast<uint32_t>(N),
-      static_cast<uint32_t>(K), alpha, ptrA, ptrB, beta, ptrC, stream,
-      kernel_name);
+  felix::FelixStatus status;
+  if (kernel_name != nullptr) {
+    status = felix::hgemm_f16_launch_by_name(M, N, K, alpha, ptrA, ptrB,
+                                                beta, ptrC, stream,
+                                                *kernel_name);
+  } else if (nt_layout) {
+    status =
+        felix::hgemm_f16_nt_launch(M, N, K, alpha, ptrA, ptrB, beta, ptrC,
+                                      stream);
+  } else {
+    status = felix::hgemm_f16_launch(M, N, K, alpha, ptrA, ptrB, beta, ptrC,
+                                        stream);
+  }
 
   TORCH_CHECK(status.ok(), "HGEMM launch failed: ", status.str());
 
   return C;
 }
 
+} // namespace
+
+torch::Tensor hgemm(const torch::Tensor &A, const torch::Tensor &B, float alpha,
+                    float beta) {
+  return hgemm_impl(A, B, alpha, beta, nullptr, false);
+}
+
+torch::Tensor hgemm_by_name(const torch::Tensor &A, const torch::Tensor &B,
+                            float alpha, float beta,
+                            const std::string &kernel_name) {
+  return hgemm_impl(A, B, alpha, beta, &kernel_name, false);
+}
+
 torch::Tensor hgemm_nt(const torch::Tensor &A, const torch::Tensor &B,
-                       float alpha, float beta,
-                       const std::string &kernel_name) {
-  TORCH_CHECK(A.is_cuda(), "A must be CUDA tensor");
-  TORCH_CHECK(B.is_cuda(), "B must be CUDA tensor");
-
-  TORCH_CHECK(A.dtype() == torch::kFloat16, "A must be float16");
-  TORCH_CHECK(B.dtype() == torch::kFloat16, "B must be float16");
-
-  TORCH_CHECK(A.dim() == 2, "A must be 2D");
-  TORCH_CHECK(B.dim() == 2, "B must be 2D");
-
-  TORCH_CHECK(A.is_contiguous(), "A must be contiguous");
-  TORCH_CHECK(B.is_contiguous(), "B must be contiguous");
-
-  int64_t M = A.size(0);
-  int64_t K = A.size(1);
-
-  int64_t N = B.size(0);
-
-  TORCH_CHECK(B.size(1) == K, "B.size(1) must match A.size(1) for NT GEMM");
-
-  auto C = torch::empty({M, N}, A.options());
-
-  const __half *ptrA = reinterpret_cast<const __half *>(A.data_ptr<at::Half>());
-
-  const __half *ptrB = reinterpret_cast<const __half *>(B.data_ptr<at::Half>());
-
-  __half *ptrC = reinterpret_cast<__half *>(C.data_ptr<at::Half>());
-
-  cudaStream_t stream = at::cuda::getCurrentCUDAStream();
-
-  auto status = felix::ampere_hgemm_launch(
-      static_cast<uint32_t>(M), static_cast<uint32_t>(N),
-      static_cast<uint32_t>(K), alpha, ptrA, ptrB, beta, ptrC, stream,
-      kernel_name);
-
-  TORCH_CHECK(status.ok(), "HGEMM NT launch failed: ", status.str());
-
-  return C;
+                       float alpha, float beta) {
+  return hgemm_impl(A, B, alpha, beta, nullptr, true);
 }
 } // namespace sion

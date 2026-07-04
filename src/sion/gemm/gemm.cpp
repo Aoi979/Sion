@@ -2,7 +2,7 @@
 
 namespace sion {
 torch::Tensor gemm(const torch::Tensor &A, const torch::Tensor &B, float alpha,
-                   float beta, const std::string &kernel_name) {
+                   float beta) {
                     
     TORCH_CHECK(A.is_cuda(), "A must be CUDA tensor");
     TORCH_CHECK(B.is_cuda(), "B must be CUDA tensor");
@@ -12,12 +12,10 @@ torch::Tensor gemm(const torch::Tensor &A, const torch::Tensor &B, float alpha,
 
     switch (A.scalar_type()) {
         case torch::kFloat32:
-            return kernel_name.empty() ? sgemm(A, B, alpha, beta)
-                                       : sgemm(A, B, alpha, beta, kernel_name);
+            return sgemm(A, B, alpha, beta);
 
         case torch::kFloat16:
-            return kernel_name.empty() ? hgemm(A, B, alpha, beta)
-                                       : hgemm(A, B, alpha, beta, kernel_name);
+            return hgemm(A, B, alpha, beta);
 
         default:
             TORCH_CHECK(false,

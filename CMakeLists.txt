@@ -16,7 +16,7 @@ add_subdirectory(src)
 option(BUILD_PYTHON_BINDING "Build Python binding" OFF)
 
 if(BUILD_PYTHON_BINDING)
-    find_package(Python3 COMPONENTS Development REQUIRED)
+    find_package(Python3 COMPONENTS Interpreter Development.Module REQUIRED)
     add_subdirectory(python)
 endif()
 

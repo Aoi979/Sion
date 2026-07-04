@@ -26,6 +26,7 @@ target_include_directories(felix PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
 )
 target_link_libraries(felix PUBLIC CUDA::cuda_driver)
+target_link_options(felix PRIVATE -static-libstdc++ -static-libgcc)
 
 add_subdirectory(base)
 add_subdirectory(gemm)

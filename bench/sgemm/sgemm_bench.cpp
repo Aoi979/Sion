@@ -19,7 +19,7 @@ struct Args {
   sion::bench::BenchmarkConfig bench_cfg;
   float alpha = 1.0f;
   float beta = 0.0f;
-  std::string kernel = "cute_sgemm_64x64_nn";
+  std::string kernel = "sm80_sgemm_f32_nn_m64n64k8_cute";
   std::vector<Shape> shapes;
   std::string out = "sion_bench.md";
 };
@@ -31,19 +31,19 @@ struct Alignment {
 };
 
 static Alignment kernel_alignment(const std::string &kernel) {
-  if (kernel == "ampere_sgemm_128x128_nn_a1b0") {
+  if (kernel == "sm80_sgemm_f32_nn_m128n128k16_a1b0") {
     return {128, 128, 16};
   }
-  if (kernel == "sm80_sgemm_128x128x8_stage5" ||
-      kernel == "sm80_sgemm_128x128x8_stage5_one_cta_per_sm" ||
-      kernel == "sm80_sgemm_128x128x8_stage5_cutlass_warp_order" ||
-      kernel == "sm80_sgemm_128x128x8_stage5_cutlass_schedule" ||
-      kernel == "sm80_sgemm_128x128x8_stage5_cutlass_copy_schedule" ||
-      kernel == "sm80_sgemm_128x128x8_stage5_cutlass_sm80_mma_order") {
+  if (kernel == "sm80_sgemm_f32_nn_m128n128k8_stage5" ||
+      kernel == "sm80_sgemm_f32_nn_m128n128k8_stage5_one_cta_per_sm" ||
+      kernel == "sm80_sgemm_f32_nn_m128n128k8_stage5_cutlass_warp_order" ||
+      kernel == "sm80_sgemm_f32_nn_m128n128k8_stage5_cutlass_schedule" ||
+      kernel == "sm80_sgemm_f32_nn_m128n128k8_stage5_cutlass_copy_schedule" ||
+      kernel == "sm80_sgemm_f32_nn_m128n128k8_stage5_cutlass_sm80_mma_order") {
     return {128, 128, 8};
   }
-  if (kernel == "cute_sgemm_64x64_nn" || kernel == "cute_sgemm_64x64_nn_swizzle" ||
-      kernel == "ampere_sgemm_64x64_nn") {
+  if (kernel == "sm80_sgemm_f32_nn_m64n64k8_cute" || kernel == "sm80_sgemm_f32_nn_m64n64k8_cute_swizzle" ||
+      kernel == "sm80_sgemm_f32_nn_m64n64k8_basic") {
     return {64, 64, 8};
   }
   return {};
@@ -54,13 +54,14 @@ static void print_usage(const char *prog) {
       << "Usage: " << prog
       << " [--shape MxNxK] [--m M --n N --k K] [--alpha A --beta B]\n"
       << "       [--kernel NAME] [--warmup W --repeat R --iters I] [--out FILE]\n"
-      << "Default kernel: cute_sgemm_64x64_nn\n"
+      << "Default kernel: sm80_sgemm_f32_nn_m64n64k8_cute\n"
       << "Known alignments:\n"
-      << "  ampere_sgemm_128x128_nn_a1b0: M/N % 128 == 0, K % 16 == 0\n"
-      << "  sm80_sgemm_128x128x8_stage5*: M/N % 128 == 0, K % 8 == 0\n"
-      << "  cute_sgemm_64x64_nn(_swizzle), ampere_sgemm_64x64_nn: M/N % 64 == 0, K % 8 == 0\n"
+      << "  sm80_sgemm_f32_nn_m128n128k16_a1b0: M/N % 128 == 0, K % 16 == 0\n"
+      << "  sm80_sgemm_f32_nn_m128n128k8_stage5*: M/N % 128 == 0, K % 8 == 0\n"
+      << "  sm80_sgemm_f32_nn_m64n64k8_{basic,cute,cute_swizzle}: M/N % 64 == 0, K % 8 == 0\n"
       << "Example:\n"
-      << "  " << prog << " --kernel cute_sgemm_64x64_nn_swizzle "
+      << "  " << prog
+      << " --kernel sm80_sgemm_f32_nn_m64n64k8_cute_swizzle "
       << "--shape 2048x2048x2048 --warmup 5 --repeat 20 "
       << "--iters 10\n";
 }
@@ -221,7 +222,7 @@ int main(int argc, char **argv) {
                             "H2D sync failed");
 
     auto launch = [&](cudaStream_t s) {
-      auto status = felix::ampere_sgemm_launch(
+      auto status = felix::sgemm_f32_launch_by_name(
           shape.m, shape.n, shape.k, args.alpha, dA, dB, args.beta, dC, s,
           args.kernel);
       if (!status.ok()) {

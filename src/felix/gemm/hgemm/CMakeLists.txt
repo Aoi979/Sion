@@ -1,14 +1,13 @@
 target_sources(felix PRIVATE
-    hgemm.cu
-    cute_hgemm_128x128_nn_kernel_launch.cu
-    cute_hgemm_128x128_nt_kernel_launch.cu
-    sm80_hgemm_128x128_kernel_launch.cu
+    launchers/sm80_hgemm_f16_nn_m128n128k64_cute_mma16816.cu
+    launchers/sm80_hgemm_f16_nt_m128n128k64_cute_mma16816.cu
+    launchers/sm80_hgemm_f16_nn_m128n128k64_accum.cu
 )
 
 if(SION_BUILD_SM90_KERNELS)
     add_library(felix_sm90_hgemm OBJECT
-        sm90_hgemm_kernel_launch.cu
-        sm90_hgemm_coop_kernel_launch.cu
+        launchers/sm90_hgemm_f16_nn_m128n128k64_pingpong.cu
+        launchers/sm90_hgemm_f16_nn_m128n256k64_cooperative.cu
     )
     set_target_properties(felix_sm90_hgemm PROPERTIES
         CUDA_ARCHITECTURES 90a

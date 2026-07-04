@@ -4,43 +4,70 @@ import sys
 try:
     import torch
     import sion
+    from correctness_common import assert_close_with_stats, clear_cuda_cache, require_cuda
 except ModuleNotFoundError as exc:
     print(f"skip: missing Python dependency: {exc}", file=sys.stderr)
     raise SystemExit(77)
 
 
-if not torch.cuda.is_available():
-    print("skip: CUDA is not available", file=sys.stderr)
-    raise SystemExit(77)
+require_cuda()
 
 
-def assert_close(name, actual, expected, atol=3e-2, rtol=3e-2):
-    max_abs = (actual.float() - expected.float()).abs().max().item()
-    try:
-        torch.testing.assert_close(actual, expected, atol=atol, rtol=rtol)
-    except AssertionError as exc:
-        raise AssertionError(f"{name} max_abs={max_abs}") from exc
+def hgemm_ref(a: torch.Tensor, b: torch.Tensor, alpha: float, beta: float):
+    c = torch.zeros((a.shape[0], b.shape[1]), device=a.device, dtype=torch.float16)
+    return torch.addmm(c, a, b, beta=beta, alpha=alpha)
 
 
+def run_hgemm_case(
+    name: str,
+    m: int,
+    k: int,
+    n: int,
+    *,
+    alpha: float = 1.0,
+    beta: float = 0.0,
+    atol: float = 6.0,
+    rtol: float = 2e-2,
+    nt: bool = False,
+):
+    torch.manual_seed(0)
+    a = torch.rand((m, k), device="cuda", dtype=torch.float16)
+    b = torch.rand((k, n), device="cuda", dtype=torch.float16)
+    ref = hgemm_ref(a, b, alpha, beta)
+
+    if nt:
+        out = torch.ops.sion.hgemm_nt(a, b.transpose(0, 1).contiguous(), alpha, beta)
+    else:
+        out = sion.hgemm(a, b, alpha, beta)
+
+    assert_close_with_stats(name, out, ref, atol=atol, rtol=rtol)
+    del a, b, ref, out
+    clear_cuda_cache()
+
+
+# Ports of the old C++ correctness cases.
+run_hgemm_case("hgemm_basic0_cpp_port", 2048, 2048, 2048)
+run_hgemm_case("hgemm_nt_basic0_cpp_port", 2048, 2048, 2048, nt=True)
+
+# Python-only dispatcher/autograd coverage.
 torch.manual_seed(0)
-M, K, N = 128, 64, 128
-A = torch.randn((M, K), device="cuda", dtype=torch.float16) * 0.1
-B = torch.randn((K, N), device="cuda", dtype=torch.float16) * 0.1
-ref = (A.float() @ B.float()).half()
+A = torch.randn((128, 64), device="cuda", dtype=torch.float16) * 0.1
+B = torch.randn((64, 128), device="cuda", dtype=torch.float16) * 0.1
+REF = (A.float() @ B.float()).half()
 
-out = sion.hgemm(A, B, 1.0, 0.0, kernel_name="cute_hgemm_128x128_nn")
-torch.cuda.synchronize()
-assert_close("cute_hgemm_128x128_nn", out, ref)
+OUT = sion.hgemm(A, B, 1.0, 0.0)
+assert_close_with_stats("sion.hgemm.smoke", OUT, REF, atol=3e-2, rtol=3e-2)
 
-out_sm80 = sion.hgemm(
-    A, B, 1.0, 0.0, kernel_name="sm80_hgemm_128x128x64_fp32acc"
-)
-torch.cuda.synchronize()
-assert_close("sm80_hgemm_128x128x64_fp32acc", out_sm80, ref)
+OUT_OPS = torch.ops.sion.hgemm(A, B, 1.0, 0.0)
+assert_close_with_stats("torch.ops.sion.hgemm.smoke", OUT_OPS, REF, atol=3e-2, rtol=3e-2)
 
-B_t = B.t().contiguous()
-out_nt = sion.hgemm_nt(A, B_t, 1.0, 0.0)
-torch.cuda.synchronize()
-assert_close("cute_hgemm_128x128_nt", out_nt, ref)
+A_grad = A.detach().clone().requires_grad_(True)
+B_grad = B.detach().clone().requires_grad_(True)
+loss = sion.hgemm(A_grad, B_grad).float().sum()
+loss.backward()
+assert A_grad.grad is not None
+assert B_grad.grad is not None
+assert A_grad.grad.shape == A_grad.shape
+assert B_grad.grad.shape == B_grad.shape
 
 print("python_hgemm_test passed")

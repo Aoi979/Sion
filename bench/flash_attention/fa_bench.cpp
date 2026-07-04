@@ -1,15 +1,15 @@
 #include "../common.hpp"
 #include <ATen/cuda/CUDAContext.h>
-#include <felix/felix.hpp>
-#include <torch/torch.h>
 #include <cstdint>
 #include <cstdlib>
 #include <ctime>
+#include <felix/felix.hpp>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <torch/torch.h>
 #include <vector>
 
 struct Shape {
@@ -24,14 +24,13 @@ struct Args {
   std::vector<Shape> shapes;
   std::string out = "fa_compare.md";
   std::string ref = "libtorch_sdpa";
-  std::string kernel = "ampere_flash_attn_mma16168_64_1D_warp_tiling";
+  std::string kernel = "auto";
 };
 
 static void print_usage(const char *prog) {
   std::cout
-      << "Usage: " << prog
-      << " [--shape BxHxNxD] [--b B --h H --n N --d D]\n"
-      << "       [--ref libtorch_sdpa|none] [--kernel NAME]\n"
+      << "Usage: " << prog << " [--shape BxHxNxD] [--b B --h H --n N --d D]\n"
+      << "       [--ref libtorch_sdpa|none] [--kernel auto|NAME]\n"
       << "       [--warmup W --repeat R --iters I]\n"
       << "       [--out FILE]\n"
       << "Note: seq_len(N) must be divisible by 64; head_dim(D) supports 64 "
@@ -80,13 +79,12 @@ static bool valid_shape(const Shape &s) {
 
 static torch::Tensor sdpa_ref(const torch::Tensor &q, const torch::Tensor &k,
                               const torch::Tensor &v) {
-  return at::scaled_dot_product_attention(
-      q, k, v,
-      /*attn_mask=*/c10::nullopt,
-      /*dropout_p=*/0.0,
-      /*is_causal=*/false,
-      /*scale=*/c10::nullopt,
-      /*enable_gqa=*/false);
+  return at::scaled_dot_product_attention(q, k, v,
+                                          /*attn_mask=*/c10::nullopt,
+                                          /*dropout_p=*/0.0,
+                                          /*is_causal=*/false,
+                                          /*scale=*/c10::nullopt,
+                                          /*enable_gqa=*/false);
 }
 
 static double effective_tflops(const Shape &s, double avg_ms) {
@@ -211,11 +209,12 @@ int main(int argc, char **argv) {
       << ", repeat=" << args.bench_cfg.repeat
       << ", iters=" << args.bench_cfg.iters << "\n";
   out << "- note: `cuBLAS*` columns below are kept for compatibility with "
-         "existing plot scripts; actual ref backend is `" << args.ref
-      << "`.\n\n";
+         "existing plot scripts; actual ref backend is `"
+      << args.ref << "`.\n\n";
   out << "| Shape | Sion avg_ms | cuBLAS avg_ms (ref) | Sion speedup vs cuBLAS "
          "| Sion TFLOPS | cuBLAS TFLOPS | Sion TFLOPS ratio | Winner |\n";
-  out << "|-------|-------------|---------------------|------------------------|"
+  out << "|-------|-------------|---------------------|------------------------"
+         "|"
          "-------------|---------------|-------------------|--------|\n";
 
   for (const auto &shape : args.shapes) {
@@ -233,15 +232,29 @@ int main(int argc, char **argv) {
     auto felix_launch = [&](cudaStream_t s) {
       felix::FelixStatus status;
       if (shape.d == 64) {
-        status = felix::ampere_flash_attn_launch<64, 64>(
-            dQ, dK, dV, dO, static_cast<uint32_t>(shape.h),
-            static_cast<uint32_t>(shape.b), static_cast<uint32_t>(shape.n), s,
-            args.kernel);
+        if (args.kernel == "auto") {
+          status = felix::flash_attn_f16_launch<64, 64>(
+              dQ, dK, dV, dO, static_cast<uint32_t>(shape.h),
+              static_cast<uint32_t>(shape.b), static_cast<uint32_t>(shape.n),
+              s);
+        } else {
+          status = felix::flash_attn_f16_launch_by_name<64, 64>(
+              dQ, dK, dV, dO, static_cast<uint32_t>(shape.h),
+              static_cast<uint32_t>(shape.b), static_cast<uint32_t>(shape.n), s,
+              args.kernel);
+        }
       } else if (shape.d == 128) {
-        status = felix::ampere_flash_attn_launch<128, 64>(
-            dQ, dK, dV, dO, static_cast<uint32_t>(shape.h),
-            static_cast<uint32_t>(shape.b), static_cast<uint32_t>(shape.n), s,
-            args.kernel);
+        if (args.kernel == "auto") {
+          status = felix::flash_attn_f16_launch<128, 64>(
+              dQ, dK, dV, dO, static_cast<uint32_t>(shape.h),
+              static_cast<uint32_t>(shape.b), static_cast<uint32_t>(shape.n),
+              s);
+        } else {
+          status = felix::flash_attn_f16_launch_by_name<128, 64>(
+              dQ, dK, dV, dO, static_cast<uint32_t>(shape.h),
+              static_cast<uint32_t>(shape.b), static_cast<uint32_t>(shape.n), s,
+              args.kernel);
+        }
       } else {
         std::cerr << "Unsupported head dimension in launch: " << shape.d
                   << "\n";
@@ -280,13 +293,13 @@ int main(int argc, char **argv) {
     std::cout << "[Sion] fa " << shape_to_string(shape)
               << " avg_ms=" << felix_stats.avg_ms;
     if (args.ref == "libtorch_sdpa") {
-      std::cout << " ref_avg_ms=" << ref_avg_ms
-                << " speedup=" << speedup << "x";
+      std::cout << " ref_avg_ms=" << ref_avg_ms << " speedup=" << speedup
+                << "x";
     }
     std::cout << "\n";
 
-    out << "| " << shape_to_string(shape) << " | " << format_num(felix_stats.avg_ms)
-        << " | ";
+    out << "| " << shape_to_string(shape) << " | "
+        << format_num(felix_stats.avg_ms) << " | ";
     if (args.ref == "libtorch_sdpa") {
       out << format_num(ref_avg_ms);
     } else {

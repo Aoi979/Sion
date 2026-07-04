@@ -16,7 +16,7 @@ CUBLAS_BIN="${CUBLAS_BIN:-${BIN_DIR}/cublas_hgemm_bench}"
 OUT_DIR="${OUT_DIR:-${BIN_DIR}/bench_results}"
 OUT_MD="${OUT_MD:-${OUT_DIR}/hgemm_compare.md}"
 REF_IMPL="${REF_IMPL:-cublas}"
-KERNEL_NAME="${KERNEL_NAME:-cute_hgemm_128x128_nn}"
+KERNEL_NAME="${KERNEL_NAME:-sm80_hgemm_f16_nn_m128n128k64_cute_mma16816}"
 mkdir -p "${OUT_DIR}"
 
 # 基准配置（可通过环境变量覆盖）

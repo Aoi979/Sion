@@ -12,7 +12,7 @@ FA_BIN="${FA_BIN:-${BIN_DIR}/fa_bench}"
 OUT_DIR="${OUT_DIR:-${BIN_DIR}/bench_results}"
 OUT_MD="${OUT_MD:-${OUT_DIR}/fa_compare.md}"
 REF_IMPL="${REF_IMPL:-libtorch_sdpa}"
-KERNEL_NAME="${KERNEL_NAME:-ampere_flash_attn_mma16168_64_1D_warp_tiling}"
+KERNEL_NAME="${KERNEL_NAME:-auto}"
 
 WARMUP="${WARMUP:-5}"
 REPEAT="${REPEAT:-20}"

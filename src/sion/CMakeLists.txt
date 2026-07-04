@@ -9,7 +9,10 @@ target_sources(sion PUBLIC
     ${CMAKE_SOURCE_DIR}/include/sion/sion.hpp
 )
 
+target_sources(sion PRIVATE torch_ops.cpp)
+
 target_link_libraries(sion PUBLIC torch felix)
+target_link_options(sion PRIVATE -static-libstdc++ -static-libgcc)
 
 add_subdirectory(flash_attention)
 add_subdirectory(gemm)
@@ -46,4 +49,3 @@ install(FILES
     ${CMAKE_CURRENT_BINARY_DIR}/SionConfigVersion.cmake
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/Sion
 )
-

@@ -20,7 +20,7 @@ struct Args {
   sion::bench::BenchmarkConfig bench_cfg;
   float alpha = 1.0f;
   float beta = 0.0f;
-  std::string kernel = "cute_hgemm_128x128_nn";
+  std::string kernel = "sm80_hgemm_f16_nn_m128n128k64_cute_mma16816";
   std::vector<Shape> shapes;
   std::string out = "hgemm_bench.md";
 };
@@ -32,7 +32,7 @@ struct Alignment {
 };
 
 static Alignment kernel_alignment(const std::string &kernel) {
-  if (kernel == "sm90_hgemm_128x256x64_cooperative") {
+  if (kernel == "sm90_hgemm_f16_nn_m128n256k64_cooperative") {
     return {128, 512, 64};
   }
   return {128, 128, 64};
@@ -45,13 +45,14 @@ static void print_usage(const char *prog) {
       << "       [--kernel NAME] [--warmup W --repeat R --iters I] [--out "
          "FILE]\n"
       << "Known alignments:\n"
-      << "  cute_hgemm_128x128_nn, sm80_hgemm_128x128x64_*, "
-         "sm90_hgemm_128x128x64_pingpong: M/N % 128 == 0, K % 64 == 0\n"
-      << "  sm90_hgemm_128x256x64_cooperative: M % 128 == 0, N % 512 == 0, "
+      << "  sm80_hgemm_f16_nn_m128n128k64_* and "
+         "sm90_hgemm_f16_nn_m128n128k64_pingpong: M/N % 128 == 0, K % 64 == 0\n"
+      << "  sm90_hgemm_f16_nn_m128n256k64_cooperative: M % 128 == 0, N % 512 == 0, "
          "K % 64 == 0\n"
       << "Example:\n"
       << "  " << prog
-      << " --shape 2048x2048x2048 --kernel cute_hgemm_128x128_nn "
+      << " --shape 2048x2048x2048 --kernel "
+         "sm80_hgemm_f16_nn_m128n128k64_cute_mma16816 "
          "--warmup 5 --repeat 20 --iters 10\n";
 }
 
@@ -211,7 +212,7 @@ int main(int argc, char **argv) {
                             "H2D sync failed");
 
     auto launch = [&](cudaStream_t s) {
-      auto status = felix::ampere_hgemm_launch(
+      auto status = felix::hgemm_f16_launch_by_name(
           shape.m, shape.n, shape.k, args.alpha, dA, dB, args.beta, dC, s,
           args.kernel);
       if (!status.ok()) {

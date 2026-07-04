@@ -1,3 +1,3 @@
 target_sources(felix PRIVATE
-    ampere_flash_attn_mma16168_64_1D_warp_tiling_kernel_launch.cu
+    launchers/sm80_flash_attn_f16_bq64_bk64_mma16168_s2_1d.cu
 )

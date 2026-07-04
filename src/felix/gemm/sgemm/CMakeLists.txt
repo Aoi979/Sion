@@ -1,10 +1,10 @@
 target_sources(felix PRIVATE
-    ampere_sgemm_64x64_nn_kernel_launch.cu
-    cute_sgemm_128x128_nn_kernel_launch.cu
-    cute_sgemm_128x128_nn_wt_kernel_launch.cu
-    cute_sgemm_128x128_nn_wt_db_kernel_launch.cu
-    ampere_sgemm_128x128_nn_a1b0_kernel_launch.cu
-    sm80_sgemm_stage5_kernel_launch.cu
-    cute_sgemm_64x64_nn_kernel_launch.cu
-    cute_sgemm_64x64_nn_swizzle_kernel_launch.cu
+    launchers/sm80_sgemm_f32_nn_m64n64k8_basic.cu
+    launchers/sm80_sgemm_f32_nn_m64n64k8_cute.cu
+    launchers/sm80_sgemm_f32_nn_m64n64k8_cute_swizzle.cu
+    launchers/sm80_sgemm_f32_nn_m128n128k8_cute.cu
+    launchers/sm80_sgemm_f32_nn_m128n128k8_cute_warp_tiling.cu
+    launchers/sm80_sgemm_f32_nn_m128n128k8_cute_warp_tiling_db.cu
+    launchers/sm80_sgemm_f32_nn_m128n128k16_a1b0.cu
+    launchers/sm80_sgemm_f32_nn_m128n128k8_stage5.cu
 )
