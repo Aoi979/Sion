@@ -21,4 +21,4 @@ if(BUILD_PYTHON_BINDING)
 endif()
 
 add_subdirectory(tests)
-add_subdirectory(bench)
+add_subdirectory(benchmarks)

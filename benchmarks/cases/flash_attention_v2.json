@@ -1,0 +1,22 @@
+{
+  "defaults": {
+    "warmup": 10,
+    "repeat": 30,
+    "iters": 0,
+    "min_sample_ms": 10.0
+  },
+  "jobs": [
+    {
+      "op": "flash_attention",
+      "shape": "1x1x128x64",
+      "kernel": "sm80_flash_attn_f16_hd64_bq128_bk128_mma16816_v2",
+      "layers": ["raw", "felix", "torch"]
+    },
+    {
+      "op": "flash_attention",
+      "shape": "1x1x128x128",
+      "kernel": "sm80_flash_attn_f16_hd128_bq128_bk64_mma16816_v2",
+      "layers": ["raw", "felix", "torch"]
+    }
+  ]
+}

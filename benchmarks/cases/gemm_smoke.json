@@ -1,0 +1,22 @@
+{
+  "defaults": {
+    "warmup": 10,
+    "repeat": 30,
+    "iters": 0,
+    "min_sample_ms": 10.0
+  },
+  "jobs": [
+    {
+      "op": "sgemm",
+      "shape": "1024x1024x1024",
+      "kernel": "auto",
+      "layers": ["felix", "torch"]
+    },
+    {
+      "op": "hgemm",
+      "shape": "1024x1024x1024",
+      "kernel": "auto",
+      "layers": ["felix", "torch"]
+    }
+  ]
+}

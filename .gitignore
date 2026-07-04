@@ -22,6 +22,8 @@ __pycache__/
 /*.log
 /sgemm_report.md
 /hgemm_tc_report.md
+/benchmarks/results/*
+!/benchmarks/results/.gitkeep
 
 # External kernel drop-in directories copied into src/felix.
 /my_kernel_sm80/
