@@ -1,4 +1,5 @@
-#include "../../common.hpp"
+#include "../detail/tensor_utils.hpp"
+
 #include <felix/felix.hpp>
 namespace sion {
 namespace {
@@ -36,9 +37,9 @@ torch::Tensor sgemm_impl(const torch::Tensor &A, const torch::Tensor &B,
   auto status =
       kernel_name == nullptr
           ? felix::sgemm_f32_launch(M, N, K, alpha, ptrA, ptrB, beta, ptrC,
-                                       stream)
-          : felix::sgemm_f32_launch_by_name(
-                M, N, K, alpha, ptrA, ptrB, beta, ptrC, stream, *kernel_name);
+                                    stream)
+          : felix::sgemm_f32_launch_by_name(M, N, K, alpha, ptrA, ptrB, beta,
+                                            ptrC, stream, *kernel_name);
 
   TORCH_CHECK(status.ok(), "SGEMM launch failed: ", status.str());
 

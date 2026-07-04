@@ -1,4 +1,5 @@
-#include "../../common.hpp"
+#include "../detail/tensor_utils.hpp"
+
 #include <felix/felix.hpp>
 namespace sion {
 namespace {
@@ -19,8 +20,7 @@ torch::Tensor hgemm_impl(const torch::Tensor &A, const torch::Tensor &B,
   const int64_t n = nt_layout ? B.size(0) : B.size(1);
 
   if (nt_layout) {
-    TORCH_CHECK(B.size(1) == k,
-                "B.size(1) must match A.size(1) for NT GEMM");
+    TORCH_CHECK(B.size(1) == k, "B.size(1) must match A.size(1) for NT GEMM");
   } else {
     TORCH_CHECK(B.size(0) == k, "B.size(0) must match A.size(1)");
   }
@@ -41,16 +41,14 @@ torch::Tensor hgemm_impl(const torch::Tensor &A, const torch::Tensor &B,
 
   felix::FelixStatus status;
   if (kernel_name != nullptr) {
-    status = felix::hgemm_f16_launch_by_name(M, N, K, alpha, ptrA, ptrB,
-                                                beta, ptrC, stream,
-                                                *kernel_name);
+    status = felix::hgemm_f16_launch_by_name(M, N, K, alpha, ptrA, ptrB, beta,
+                                             ptrC, stream, *kernel_name);
   } else if (nt_layout) {
-    status =
-        felix::hgemm_f16_nt_launch(M, N, K, alpha, ptrA, ptrB, beta, ptrC,
-                                      stream);
-  } else {
-    status = felix::hgemm_f16_launch(M, N, K, alpha, ptrA, ptrB, beta, ptrC,
+    status = felix::hgemm_f16_nt_launch(M, N, K, alpha, ptrA, ptrB, beta, ptrC,
                                         stream);
+  } else {
+    status =
+        felix::hgemm_f16_launch(M, N, K, alpha, ptrA, ptrB, beta, ptrC, stream);
   }
 
   TORCH_CHECK(status.ok(), "HGEMM launch failed: ", status.str());

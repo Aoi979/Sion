@@ -28,7 +28,7 @@ target_include_directories(felix PRIVATE
 target_link_libraries(felix PUBLIC CUDA::cuda_driver)
 target_link_options(felix PRIVATE -static-libstdc++ -static-libgcc)
 
-add_subdirectory(base)
+add_subdirectory(runtime)
 add_subdirectory(gemm)
 add_subdirectory(flash_attention)
 add_subdirectory(topk)

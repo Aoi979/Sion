@@ -9,13 +9,16 @@ target_sources(sion PUBLIC
     ${CMAKE_SOURCE_DIR}/include/sion/sion.hpp
 )
 
-target_sources(sion PRIVATE torch_ops.cpp)
+target_sources(sion PRIVATE
+    operators/flash_attention.cpp
+    operators/gemm.cpp
+    operators/hgemm.cpp
+    operators/sgemm.cpp
+    torch/library.cpp
+)
 
 target_link_libraries(sion PUBLIC torch felix)
 target_link_options(sion PRIVATE -static-libstdc++ -static-libgcc)
-
-add_subdirectory(flash_attention)
-add_subdirectory(gemm)
 
 install(TARGETS sion
     EXPORT SionTargets

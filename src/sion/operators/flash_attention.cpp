@@ -1,4 +1,5 @@
-#include "../common.hpp"
+#include "../detail/tensor_utils.hpp"
+
 #include <felix/felix.hpp>
 
 namespace sion {

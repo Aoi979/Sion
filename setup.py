@@ -9,9 +9,9 @@ ROOT = Path(__file__).parent.resolve()
 
 sources = [
     "python/binding.cpp",
-    "src/felix/base/status.cpp",
-    "src/felix/base/registry.cpp",
-    "src/felix/base/felix_api.cpp",
+    "src/felix/runtime/status.cpp",
+    "src/felix/runtime/registry.cpp",
+    "src/felix/runtime/api.cpp",
     "src/felix/gemm/sgemm/launchers/sm80_sgemm_f32_nn_m64n64k8_basic.cu",
     "src/felix/gemm/sgemm/launchers/sm80_sgemm_f32_nn_m64n64k8_cute.cu",
     "src/felix/gemm/sgemm/launchers/sm80_sgemm_f32_nn_m64n64k8_cute_swizzle.cu",
@@ -33,11 +33,11 @@ sources = [
     "src/felix/flash_attention/launchers/sm80_flash_attn_f16_hd64_bq128_bk128_mma16816_v2.cu",
     "src/felix/flash_attention/launchers/sm80_flash_attn_f16_hd128_bq128_bk64_mma16816_v2.cu",
     "src/felix/topk/launchers/cuda_topk_f32_radix_select.cu",
-    "src/sion/gemm/gemm.cpp",
-    "src/sion/gemm/sgemm/sgemm.cpp",
-    "src/sion/gemm/hgemm/hgemm.cpp",
-    "src/sion/flash_attention/flash_attn.cpp",
-    "src/sion/torch_ops.cpp",
+    "src/sion/operators/gemm.cpp",
+    "src/sion/operators/sgemm.cpp",
+    "src/sion/operators/hgemm.cpp",
+    "src/sion/operators/flash_attention.cpp",
+    "src/sion/torch/library.cpp",
 ]
 
 if os.getenv("SION_BUILD_SM90_KERNELS", "0") == "1":
@@ -51,6 +51,7 @@ setup(
     version="0.1.0",
     package_dir={"": "python"},
     packages=["sion"],
+    package_data={"sion": ["py.typed", "__init__.pyi"]},
     ext_modules=[
         CUDAExtension(
             name="sion._C",

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 import torch
 import torch.nn.functional as F
 
@@ -9,11 +11,12 @@ __all__ = [
     "gemm",
     "sgemm",
     "hgemm",
+    "hgemm_nt",
     "flash_attention",
     "ops",
 ]
 
-ops = torch.ops.sion
+ops: Any = torch.ops.sion
 
 
 def _check_same_device(a: torch.Tensor, b: torch.Tensor, a_name: str, b_name: str):
@@ -160,21 +163,45 @@ torch.library.register_autograd(
 )
 
 
-def gemm(a: torch.Tensor, b: torch.Tensor, alpha: float = 1.0, beta: float = 0.0):
+def gemm(
+    a: torch.Tensor,
+    b: torch.Tensor,
+    alpha: float = 1.0,
+    beta: float = 0.0,
+) -> torch.Tensor:
     return ops.gemm(a, b, float(alpha), float(beta))
 
 
-def sgemm(a: torch.Tensor, b: torch.Tensor, alpha: float = 1.0, beta: float = 0.0):
+def sgemm(
+    a: torch.Tensor,
+    b: torch.Tensor,
+    alpha: float = 1.0,
+    beta: float = 0.0,
+) -> torch.Tensor:
     return ops.sgemm(a, b, float(alpha), float(beta))
 
 
-def hgemm(a: torch.Tensor, b: torch.Tensor, alpha: float = 1.0, beta: float = 0.0):
+def hgemm(
+    a: torch.Tensor,
+    b: torch.Tensor,
+    alpha: float = 1.0,
+    beta: float = 0.0,
+) -> torch.Tensor:
     return ops.hgemm(a, b, float(alpha), float(beta))
+
+
+def hgemm_nt(
+    a: torch.Tensor,
+    b: torch.Tensor,
+    alpha: float = 1.0,
+    beta: float = 0.0,
+) -> torch.Tensor:
+    return ops.hgemm_nt(a, b, float(alpha), float(beta))
 
 
 def flash_attention(
     query: torch.Tensor,
     key: torch.Tensor,
     value: torch.Tensor,
-):
+) -> torch.Tensor:
     return ops.flash_attention(query, key, value)

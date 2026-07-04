@@ -18,6 +18,12 @@ cuda_topk_f32_radix_select
 
 Rules:
 
+- `src/sion/` is the PyTorch integration layer. Tensor validation and ATen
+  wrappers live in `src/sion/operators/`; dispatcher schema and backend
+  registration live in `src/sion/torch/`; shared wrapper helpers live in
+  `src/sion/detail/`.
+- `src/felix/runtime/` owns the low-level launch API, registry, dispatch
+  selection, and status handling. It should not contain CUDA kernel bodies.
 - Public PyTorch operator names stay short: `sion::gemm`, `sion::hgemm`,
   `sion::sgemm`, `sion::flash_attention`.
 - Registry names describe implementation choices and are for internal

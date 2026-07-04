@@ -1,5 +1,5 @@
 target_sources(felix PRIVATE
     status.cpp
-    felix_api.cpp
+    api.cpp
     registry.cpp
 )

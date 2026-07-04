@@ -6,20 +6,17 @@ namespace {
 
 at::Tensor sion_gemm_cuda(const at::Tensor &A, const at::Tensor &B,
                           double alpha, double beta) {
-  return sion::gemm(A, B, static_cast<float>(alpha),
-                    static_cast<float>(beta));
+  return sion::gemm(A, B, static_cast<float>(alpha), static_cast<float>(beta));
 }
 
 at::Tensor sion_sgemm_cuda(const at::Tensor &A, const at::Tensor &B,
                            double alpha, double beta) {
-  return sion::sgemm(A, B, static_cast<float>(alpha),
-                     static_cast<float>(beta));
+  return sion::sgemm(A, B, static_cast<float>(alpha), static_cast<float>(beta));
 }
 
 at::Tensor sion_hgemm_cuda(const at::Tensor &A, const at::Tensor &B,
                            double alpha, double beta) {
-  return sion::hgemm(A, B, static_cast<float>(alpha),
-                     static_cast<float>(beta));
+  return sion::hgemm(A, B, static_cast<float>(alpha), static_cast<float>(beta));
 }
 
 at::Tensor sion_hgemm_nt_cuda(const at::Tensor &A, const at::Tensor &B,
@@ -40,8 +37,8 @@ TORCH_LIBRARY(sion, m) {
   m.def("gemm(Tensor A, Tensor B, float alpha=1.0, float beta=0.0) -> Tensor");
   m.def("sgemm(Tensor A, Tensor B, float alpha=1.0, float beta=0.0) -> Tensor");
   m.def("hgemm(Tensor A, Tensor B, float alpha=1.0, float beta=0.0) -> Tensor");
-  m.def(
-      "hgemm_nt(Tensor A, Tensor B, float alpha=1.0, float beta=0.0) -> Tensor");
+  m.def("hgemm_nt(Tensor A, Tensor B, float alpha=1.0, float beta=0.0) -> "
+        "Tensor");
   m.def("flash_attention(Tensor query, Tensor key, Tensor value) -> Tensor");
 }
 
