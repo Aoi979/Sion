@@ -2,9 +2,16 @@
 #include <felix/registry.hpp>
 
 #include <sstream>
+#include <string>
 
 namespace felix {
 namespace {
+
+struct DeviceCapability {
+  int cc;
+  uint32_t max_dynamic_smem_bytes;
+  uint32_t max_threads_per_block;
+};
 
 struct GemmDispatchKey {
   KernelType type;
@@ -14,14 +21,14 @@ struct GemmDispatchKey {
   uint32_t k;
   float alpha;
   float beta;
-  int cc;
+  DeviceCapability device;
 };
 
 struct FlashAttnDispatchKey {
   uint32_t head_dim;
   uint32_t block_k;
   uint32_t seq_len;
-  int cc;
+  DeviceCapability device;
 };
 
 const char *kernel_type_name(KernelType type) {
@@ -48,7 +55,7 @@ const char *kernel_layout_name(KernelLayout layout) {
   return "Unknown";
 }
 
-FelixStatus current_compute_capability(int &cc) {
+FelixStatus current_device_capability(DeviceCapability &device_capability) {
   int device = 0;
   cudaError_t err = cudaGetDevice(&device);
   if (err != cudaSuccess) {
@@ -64,18 +71,46 @@ FelixStatus current_compute_capability(int &cc) {
         "cudaGetDeviceProperties failed during Felix dispatch");
   }
 
-  cc = prop.major * 10 + prop.minor;
+  device_capability.cc = prop.major * 10 + prop.minor;
+  const auto default_smem = static_cast<uint32_t>(prop.sharedMemPerBlock);
+  const auto optin_smem = static_cast<uint32_t>(prop.sharedMemPerBlockOptin);
+  device_capability.max_dynamic_smem_bytes =
+      default_smem > optin_smem ? default_smem : optin_smem;
+  device_capability.max_threads_per_block =
+      static_cast<uint32_t>(prop.maxThreadsPerBlock);
   return {};
 }
 
-bool supports_arch(const KernelCommonMetadata &metadata, int cc) {
-  if (metadata.min_cc != 0 && cc < metadata.min_cc) {
-    return false;
+std::string device_support_failure_reason(const KernelCommonMetadata &metadata,
+                                          const DeviceCapability &device) {
+  if (metadata.min_cc != 0 && device.cc < metadata.min_cc) {
+    return "compute capability cc=" + std::to_string(device.cc) +
+           " is below required min_cc=" + std::to_string(metadata.min_cc);
   }
-  if (metadata.max_cc != 0 && cc > metadata.max_cc) {
-    return false;
+  if (metadata.max_cc != 0 && device.cc > metadata.max_cc) {
+    return "compute capability cc=" + std::to_string(device.cc) +
+           " is above required max_cc=" + std::to_string(metadata.max_cc);
   }
-  return true;
+  if (metadata.required_dynamic_smem_bytes != 0 &&
+      metadata.required_dynamic_smem_bytes > device.max_dynamic_smem_bytes) {
+    return "dynamic shared memory required=" +
+           std::to_string(metadata.required_dynamic_smem_bytes) +
+           " exceeds device max_dynamic_smem=" +
+           std::to_string(device.max_dynamic_smem_bytes);
+  }
+  if (metadata.required_threads_per_block != 0 &&
+      metadata.required_threads_per_block > device.max_threads_per_block) {
+    return "threads per block required=" +
+           std::to_string(metadata.required_threads_per_block) +
+           " exceeds device max_threads_per_block=" +
+           std::to_string(device.max_threads_per_block);
+  }
+  return {};
+}
+
+bool supports_device(const KernelCommonMetadata &metadata,
+                     const DeviceCapability &device) {
+  return device_support_failure_reason(metadata, device).empty();
 }
 
 int kernel_score(const KernelEntry &entry) {
@@ -83,13 +118,14 @@ int kernel_score(const KernelEntry &entry) {
 }
 
 template <typename SupportsFn>
-const KernelEntry *select_best_kernel(KernelType type, int cc,
+const KernelEntry *select_best_kernel(KernelType type,
+                                      const DeviceCapability &device,
                                       SupportsFn supports) {
   const KernelEntry *best = nullptr;
   int best_score = 0;
 
   for (const auto &entry : global_registry().all()) {
-    if (entry.type != type || !supports_arch(entry.common, cc) ||
+    if (entry.type != type || !supports_device(entry.common, device) ||
         !supports(entry)) {
       continue;
     }
@@ -121,10 +157,11 @@ bool supports_gemm(const GemmKernelMetadata &metadata,
 }
 
 const KernelEntry *select_gemm_kernel(const GemmDispatchKey &key) {
-  return select_best_kernel(key.type, key.cc, [&](const KernelEntry &entry) {
-    auto *metadata = std::get_if<GemmKernelMetadata>(&entry.metadata);
-    return metadata != nullptr && supports_gemm(*metadata, key);
-  });
+  return select_best_kernel(
+      key.type, key.device, [&](const KernelEntry &entry) {
+        auto *metadata = std::get_if<GemmKernelMetadata>(&entry.metadata);
+        return metadata != nullptr && supports_gemm(*metadata, key);
+      });
 }
 
 bool supports_flash_attn(const FlashAttnKernelMetadata &metadata,
@@ -144,7 +181,7 @@ bool supports_flash_attn(const FlashAttnKernelMetadata &metadata,
 
 const KernelEntry *select_flash_attn_kernel(const FlashAttnDispatchKey &key) {
   return select_best_kernel(
-      KernelType::FlashAttention, key.cc, [&](const KernelEntry &entry) {
+      KernelType::FlashAttention, key.device, [&](const KernelEntry &entry) {
         auto *metadata = std::get_if<FlashAttnKernelMetadata>(&entry.metadata);
         return metadata != nullptr && supports_flash_attn(*metadata, key);
       });
@@ -163,7 +200,9 @@ FelixStatus no_matching_gemm_kernel(const GemmDispatchKey &key) {
   std::ostringstream oss;
   oss << "No matching Felix GEMM kernel found"
       << " type=" << kernel_type_name(key.type)
-      << " layout=" << kernel_layout_name(key.layout) << " cc=" << key.cc
+      << " layout=" << kernel_layout_name(key.layout) << " cc=" << key.device.cc
+      << " max_dynamic_smem=" << key.device.max_dynamic_smem_bytes
+      << " max_threads_per_block=" << key.device.max_threads_per_block
       << " M=" << key.m << " N=" << key.n << " K=" << key.k
       << " alpha=" << key.alpha << " beta=" << key.beta;
   return FelixStatus::make(FelixStatus::Type::API_ERROR, cudaErrorInvalidValue,
@@ -173,8 +212,11 @@ FelixStatus no_matching_gemm_kernel(const GemmDispatchKey &key) {
 FelixStatus no_matching_flash_attn_kernel(const FlashAttnDispatchKey &key) {
   std::ostringstream oss;
   oss << "No matching Felix FlashAttention kernel found"
-      << " cc=" << key.cc << " head_dim=" << key.head_dim
-      << " block_k=" << key.block_k << " seq_len=" << key.seq_len;
+      << " cc=" << key.device.cc
+      << " max_dynamic_smem=" << key.device.max_dynamic_smem_bytes
+      << " max_threads_per_block=" << key.device.max_threads_per_block
+      << " head_dim=" << key.head_dim << " block_k=" << key.block_k
+      << " seq_len=" << key.seq_len;
   return FelixStatus::make(FelixStatus::Type::API_ERROR, cudaErrorInvalidValue,
                            oss.str());
 }
@@ -225,9 +267,9 @@ const KernelEntry *checked_named_gemm_kernel(const std::string &name,
   if (entry == nullptr) {
     return nullptr;
   }
-  if (!supports_arch(entry->common, key.cc)) {
-    status = named_kernel_not_supported(*entry, "compute capability cc=" +
-                                                    std::to_string(key.cc));
+  if (!supports_device(entry->common, key.device)) {
+    status = named_kernel_not_supported(
+        *entry, device_support_failure_reason(entry->common, key.device));
     return nullptr;
   }
   auto *metadata = std::get_if<GemmKernelMetadata>(&entry->metadata);
@@ -251,9 +293,9 @@ checked_named_flash_attn_kernel(const std::string &name,
   if (entry == nullptr) {
     return nullptr;
   }
-  if (!supports_arch(entry->common, key.cc)) {
-    status = named_kernel_not_supported(*entry, "compute capability cc=" +
-                                                    std::to_string(key.cc));
+  if (!supports_device(entry->common, key.device)) {
+    status = named_kernel_not_supported(
+        *entry, device_support_failure_reason(entry->common, key.device));
     return nullptr;
   }
   auto *metadata = std::get_if<FlashAttnKernelMetadata>(&entry->metadata);
@@ -268,15 +310,16 @@ checked_named_flash_attn_kernel(const std::string &name,
 }
 
 const KernelEntry *checked_named_topk_kernel(const std::string &name,
-                                             uint32_t k, bool largest, int cc,
+                                             uint32_t k, bool largest,
+                                             const DeviceCapability &device,
                                              FelixStatus &status) {
   auto *entry = checked_named_kernel(name, KernelType::TopK, status);
   if (entry == nullptr) {
     return nullptr;
   }
-  if (!supports_arch(entry->common, cc)) {
-    status = named_kernel_not_supported(*entry, "compute capability cc=" +
-                                                    std::to_string(cc));
+  if (!supports_device(entry->common, device)) {
+    status = named_kernel_not_supported(
+        *entry, device_support_failure_reason(entry->common, device));
     return nullptr;
   }
   auto *metadata = std::get_if<TopKKernelMetadata>(&entry->metadata);
@@ -349,14 +392,14 @@ FelixStatus dispatch_topk_entry(const KernelEntry &entry, float const *data,
 FelixStatus sgemm_f32_launch(uint32_t M, uint32_t N, uint32_t K, float alpha,
                              float const *A, float const *B, float beta,
                              float *C, cudaStream_t stream) {
-  int cc = 0;
-  auto status = current_compute_capability(cc);
+  DeviceCapability device{};
+  auto status = current_device_capability(device);
   if (!status.ok()) {
     return status;
   }
 
   const GemmDispatchKey key{
-      KernelType::SGEMM, KernelLayout::NN, M, N, K, alpha, beta, cc};
+      KernelType::SGEMM, KernelLayout::NN, M, N, K, alpha, beta, device};
   auto *entry = select_gemm_kernel(key);
   if (entry == nullptr) {
     return no_matching_gemm_kernel(key);
@@ -369,15 +412,15 @@ FelixStatus sgemm_f32_launch_by_name(uint32_t M, uint32_t N, uint32_t K,
                                      float const *B, float beta, float *C,
                                      cudaStream_t stream,
                                      const std::string &kernel_name) {
-  int cc = 0;
+  DeviceCapability device{};
   FelixStatus status;
-  status = current_compute_capability(cc);
+  status = current_device_capability(device);
   if (!status.ok()) {
     return status;
   }
 
   const GemmDispatchKey key{
-      KernelType::SGEMM, KernelLayout::NN, M, N, K, alpha, beta, cc};
+      KernelType::SGEMM, KernelLayout::NN, M, N, K, alpha, beta, device};
   auto *entry = checked_named_gemm_kernel(kernel_name, key, status);
   if (entry == nullptr) {
     return status;
@@ -388,14 +431,14 @@ FelixStatus sgemm_f32_launch_by_name(uint32_t M, uint32_t N, uint32_t K,
 FelixStatus hgemm_f16_launch(uint32_t M, uint32_t N, uint32_t K, float alpha,
                              half const *A, half const *B, float beta, half *C,
                              cudaStream_t stream) {
-  int cc = 0;
-  auto status = current_compute_capability(cc);
+  DeviceCapability device{};
+  auto status = current_device_capability(device);
   if (!status.ok()) {
     return status;
   }
 
   const GemmDispatchKey key{
-      KernelType::HGEMM, KernelLayout::NN, M, N, K, alpha, beta, cc};
+      KernelType::HGEMM, KernelLayout::NN, M, N, K, alpha, beta, device};
   auto *entry = select_gemm_kernel(key);
   if (entry == nullptr) {
     return no_matching_gemm_kernel(key);
@@ -406,14 +449,14 @@ FelixStatus hgemm_f16_launch(uint32_t M, uint32_t N, uint32_t K, float alpha,
 FelixStatus hgemm_f16_nt_launch(uint32_t M, uint32_t N, uint32_t K, float alpha,
                                 half const *A, half const *B, float beta,
                                 half *C, cudaStream_t stream) {
-  int cc = 0;
-  auto status = current_compute_capability(cc);
+  DeviceCapability device{};
+  auto status = current_device_capability(device);
   if (!status.ok()) {
     return status;
   }
 
   const GemmDispatchKey key{
-      KernelType::HGEMM, KernelLayout::NT, M, N, K, alpha, beta, cc};
+      KernelType::HGEMM, KernelLayout::NT, M, N, K, alpha, beta, device};
   auto *entry = select_gemm_kernel(key);
   if (entry == nullptr) {
     return no_matching_gemm_kernel(key);
@@ -425,15 +468,15 @@ FelixStatus hgemm_f16_launch_by_name(uint32_t M, uint32_t N, uint32_t K,
                                      float alpha, half const *A, half const *B,
                                      float beta, half *C, cudaStream_t stream,
                                      const std::string &kernel_name) {
-  int cc = 0;
+  DeviceCapability device{};
   FelixStatus status;
-  status = current_compute_capability(cc);
+  status = current_device_capability(device);
   if (!status.ok()) {
     return status;
   }
 
   const GemmDispatchKey key{
-      KernelType::HGEMM, KernelLayout::NN, M, N, K, alpha, beta, cc};
+      KernelType::HGEMM, KernelLayout::NN, M, N, K, alpha, beta, device};
   auto *entry = checked_named_gemm_kernel(kernel_name, key, status);
   if (entry == nullptr) {
     return status;
@@ -446,14 +489,15 @@ FelixStatus topk_f32_radix_select_launch(float const *data, float *out,
                                          uint32_t slice_size, uint32_t k,
                                          bool largest, cudaStream_t stream,
                                          const std::string &kernel_name) {
-  int cc = 0;
+  DeviceCapability device{};
   FelixStatus status;
-  status = current_compute_capability(cc);
+  status = current_device_capability(device);
   if (!status.ok()) {
     return status;
   }
 
-  auto *entry = checked_named_topk_kernel(kernel_name, k, largest, cc, status);
+  auto *entry =
+      checked_named_topk_kernel(kernel_name, k, largest, device, status);
   if (entry == nullptr) {
     return status;
   }
@@ -466,13 +510,13 @@ FelixStatus flash_attn_f16_launch<64, 64>(half *Q, half *K, half *V, half *O,
                                           uint32_t heads, uint32_t batch_size,
                                           uint32_t QKV_seqlen,
                                           cudaStream_t stream) {
-  int cc = 0;
-  auto status = current_compute_capability(cc);
+  DeviceCapability device{};
+  auto status = current_device_capability(device);
   if (!status.ok()) {
     return status;
   }
 
-  const FlashAttnDispatchKey key{64, 64, QKV_seqlen, cc};
+  const FlashAttnDispatchKey key{64, 64, QKV_seqlen, device};
   auto *entry = select_flash_attn_kernel(key);
   if (entry == nullptr) {
     return no_matching_flash_attn_kernel(key);
@@ -486,13 +530,13 @@ FelixStatus flash_attn_f16_launch<128, 64>(half *Q, half *K, half *V, half *O,
                                            uint32_t heads, uint32_t batch_size,
                                            uint32_t QKV_seqlen,
                                            cudaStream_t stream) {
-  int cc = 0;
-  auto status = current_compute_capability(cc);
+  DeviceCapability device{};
+  auto status = current_device_capability(device);
   if (!status.ok()) {
     return status;
   }
 
-  const FlashAttnDispatchKey key{128, 64, QKV_seqlen, cc};
+  const FlashAttnDispatchKey key{128, 64, QKV_seqlen, device};
   auto *entry = select_flash_attn_kernel(key);
   if (entry == nullptr) {
     return no_matching_flash_attn_kernel(key);
@@ -505,14 +549,14 @@ template <>
 FelixStatus flash_attn_f16_launch_by_name<64, 64>(
     half *Q, half *K, half *V, half *O, uint32_t heads, uint32_t batch_size,
     uint32_t QKV_seqlen, cudaStream_t stream, const std::string &kernel_name) {
-  int cc = 0;
+  DeviceCapability device{};
   FelixStatus status;
-  status = current_compute_capability(cc);
+  status = current_device_capability(device);
   if (!status.ok()) {
     return status;
   }
 
-  const FlashAttnDispatchKey key{64, 64, QKV_seqlen, cc};
+  const FlashAttnDispatchKey key{64, 64, QKV_seqlen, device};
   auto *entry = checked_named_flash_attn_kernel(kernel_name, key, status);
   if (entry == nullptr) {
     return status;
@@ -525,14 +569,14 @@ template <>
 FelixStatus flash_attn_f16_launch_by_name<128, 64>(
     half *Q, half *K, half *V, half *O, uint32_t heads, uint32_t batch_size,
     uint32_t QKV_seqlen, cudaStream_t stream, const std::string &kernel_name) {
-  int cc = 0;
+  DeviceCapability device{};
   FelixStatus status;
-  status = current_compute_capability(cc);
+  status = current_device_capability(device);
   if (!status.ok()) {
     return status;
   }
 
-  const FlashAttnDispatchKey key{128, 64, QKV_seqlen, cc};
+  const FlashAttnDispatchKey key{128, 64, QKV_seqlen, device};
   auto *entry = checked_named_flash_attn_kernel(kernel_name, key, status);
   if (entry == nullptr) {
     return status;

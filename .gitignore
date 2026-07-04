@@ -15,6 +15,7 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 /python/sion*.so
+/python/sion/*.so
 
 # Generated reports and scratch output
 /draw/

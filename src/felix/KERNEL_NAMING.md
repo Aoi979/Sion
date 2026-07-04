@@ -22,19 +22,17 @@ Rules:
   `sion::sgemm`, `sion::flash_attention`.
 - Registry names describe implementation choices and are for internal
   dispatch, benchmarks, and debug paths.
-- Names must be unique at registry level. If one kernel body has multiple typed
+- Names must be unique at registry level. If one algorithm has multiple typed
   specializations, encode the differentiating semantic shape in the registry
   name, for example FlashAttention `hd64` and `hd128`.
-- `launchers/` contains `.cu` files that register and launch kernels. When one
-  launcher file registers one implementation, its stem should match the
-  registry name. When it registers several typed specializations, use the
-  shared launcher stem and keep each registered name unique.
-- `kernels/` contains `.cuh` files with CUDA kernel bodies. A one-launcher
-  kernel should use the launcher stem. Shared kernel bodies should use the
-  shared stem without layout when the same body serves multiple layouts, for
-  example `sm80_hgemm_f16_m128n128k64_cute_mma16816.cuh`.
+- `launchers/` contains `.cu` files that register and launch kernels. Default to
+  one registered implementation per `.cu`; the file stem should match the
+  registry name.
+- `kernels/` contains `.cuh` files with CUDA kernel bodies. Default to one
+  top-level `__global__` kernel per `.cuh`; the file stem should match the
+  registry name without the launcher suffix.
 - `detail/` contains reusable device helpers, traits, schedulers, barriers,
-  swizzles, and epilogue/mainloop building blocks. Files in `detail/` should
-  not register kernels or expose Felix launch functions.
+  swizzles, shared launch glue, and epilogue/mainloop building blocks. Files in
+  `detail/` should not register kernels.
 - Top-level `__global__` kernel symbols should end in `_kernel` and use the same
   stem as their `.cuh` file.

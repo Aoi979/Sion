@@ -31,6 +31,8 @@ struct KernelCommonMetadata {
   int min_cc = 0;
   int max_cc = 0;
   int priority = 0;
+  uint32_t required_dynamic_smem_bytes = 0;
+  uint32_t required_threads_per_block = 0;
 };
 
 struct GemmKernelMetadata {

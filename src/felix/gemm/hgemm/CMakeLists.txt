@@ -1,7 +1,9 @@
 target_sources(felix PRIVATE
     launchers/sm80_hgemm_f16_nn_m128n128k64_cute_mma16816.cu
     launchers/sm80_hgemm_f16_nt_m128n128k64_cute_mma16816.cu
-    launchers/sm80_hgemm_f16_nn_m128n128k64_accum.cu
+    launchers/sm80_hgemm_f16_nn_m128n128k64_fp16acc.cu
+    launchers/sm80_hgemm_f16_nn_m128n128k64_fp32acc.cu
+    launchers/sm80_hgemm_f16_nn_m128n256k64_fp16acc.cu
 )
 
 if(SION_BUILD_SM90_KERNELS)

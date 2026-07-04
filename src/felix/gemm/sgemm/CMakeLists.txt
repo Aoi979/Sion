@@ -7,4 +7,9 @@ target_sources(felix PRIVATE
     launchers/sm80_sgemm_f32_nn_m128n128k8_cute_warp_tiling_db.cu
     launchers/sm80_sgemm_f32_nn_m128n128k16_a1b0.cu
     launchers/sm80_sgemm_f32_nn_m128n128k8_stage5.cu
+    launchers/sm80_sgemm_f32_nn_m128n128k8_stage5_one_cta_per_sm.cu
+    launchers/sm80_sgemm_f32_nn_m128n128k8_stage5_cutlass_warp_order.cu
+    launchers/sm80_sgemm_f32_nn_m128n128k8_stage5_cutlass_schedule.cu
+    launchers/sm80_sgemm_f32_nn_m128n128k8_stage5_cutlass_copy_schedule.cu
+    launchers/sm80_sgemm_f32_nn_m128n128k8_stage5_cutlass_sm80_mma_order.cu
 )
