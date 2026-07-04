@@ -5,9 +5,8 @@ namespace sion {
 
 namespace detail {
 template <int HEAD_DIM>
-void launch_flash_attn_mma_stages_1D(const torch::Tensor &Q,
-                                     const torch::Tensor &K,
-                                     const torch::Tensor &V, torch::Tensor &O) {
+void launch_flash_attn_sm80_v2(const torch::Tensor &Q, const torch::Tensor &K,
+                               const torch::Tensor &V, torch::Tensor &O) {
   half *dQ = reinterpret_cast<half *>(Q.data_ptr<at::Half>());
   half *dK = reinterpret_cast<half *>(K.data_ptr<at::Half>());
   half *dV = reinterpret_cast<half *>(V.data_ptr<at::Half>());
@@ -20,9 +19,9 @@ void launch_flash_attn_mma_stages_1D(const torch::Tensor &Q,
   auto batch_size = detail::checked_u32(Q.size(0), "batch_size");
   auto heads = detail::checked_u32(Q.size(1), "heads");
   auto QKV_seqlen = detail::checked_u32(Q.size(2), "seq_len");
-  // TODO: support tail tiles when seq_len is not divisible by Br (Br=64).
-  TORCH_CHECK((QKV_seqlen % 64) == 0,
-              "flash_attention: seq_len must be divisible by 64 for the "
+  // TODO: support tail tiles when seq_len is not divisible by the active tile.
+  TORCH_CHECK((QKV_seqlen % 128) == 0,
+              "flash_attention: seq_len must be divisible by 128 for the "
               "current kernel; tail handling is not implemented yet");
   auto status = felix::flash_attn_f16_launch<HEAD_DIM, 64>(
       dQ, dK, dV, dO, heads, batch_size, QKV_seqlen, stream);
@@ -38,7 +37,8 @@ torch::Tensor flash_attention(const torch::Tensor &query,
                               const torch::Tensor &value) {
   TORCH_CHECK(query.is_cuda() && key.is_cuda() && value.is_cuda(),
               "query, key and value must be CUDA tensors");
-  TORCH_CHECK(query.device() == key.device() && query.device() == value.device(),
+  TORCH_CHECK(query.device() == key.device() &&
+                  query.device() == value.device(),
               "query, key and value must be on the same CUDA device");
   TORCH_CHECK(query.dtype() == torch::kHalf && key.dtype() == torch::kHalf &&
                   value.dtype() == torch::kHalf,
@@ -60,10 +60,10 @@ torch::Tensor flash_attention(const torch::Tensor &query,
 
   switch (D) {
   case 64:
-    detail::launch_flash_attn_mma_stages_1D<64>(query, key, value, O);
+    detail::launch_flash_attn_sm80_v2<64>(query, key, value, O);
     break;
   case 128:
-    detail::launch_flash_attn_mma_stages_1D<128>(query, key, value, O);
+    detail::launch_flash_attn_sm80_v2<128>(query, key, value, O);
     break;
   default:
     TORCH_CHECK(false, "flash_attention: unsupported head dimension ", D);

@@ -1,10 +1,12 @@
 #pragma once
-#include "../../detail/sm80_mma_traits.cuh"
+#include "../detail/sm80_mma_traits.cuh"
 #include <cstddef>
 #include <cuda_fp16.h>
 #include <cuda_runtime.h>
 #include <cute/swizzle.hpp>
 #include <math_constants.h>
+
+namespace sm80_flash_attn_v2 {
 
 namespace softmax {
 
@@ -713,10 +715,8 @@ compute_attn_1rowblock(const FlashFwdParams<kHeadDim> &params, const int bidb,
   for (int k_tile = 0; k_tile < num_k_tiles; ++k_tile) {
     const half *gV = gV_base + k_tile * kBlockN * ValueRowStride;
 
-
     // Load V_current.
     async_load_x_tensor<kHeadDim, kBlockN, kThreads>(sV, gV, ValueRowStride);
-
 
     // acc_s = Q_i @ K_current^T
     clearS(tSrS);
@@ -724,7 +724,6 @@ compute_attn_1rowblock(const FlashFwdParams<kHeadDim> &params, const int bidb,
     compute_score_ss<kHeadDim, kBlockM, kBlockN, MMA_M, MMA_N, MMA_K>(
         sQ, sK, &tSrQ[0][0][0][0][0], &tSrK[0][0][0][0][0],
         &tSrS[0][0][0][0][0]);
-
 
     // Need V_current before P @ V.
     cp_async::wait_group<0>();
@@ -746,8 +745,7 @@ compute_attn_1rowblock(const FlashFwdParams<kHeadDim> &params, const int bidb,
     }
     convertS(tSrS, tOrP);
     compute_output_rs<kHeadDim, kBlockM, kBlockN, MMA_M, MMA_N, MMA_K>(
-        &tOrP[0][0][0][0][0], sV, &tOrV[0][0][0][0][0],
-        &tOrO[0][0][0][0][0]);
+        &tOrP[0][0][0][0][0], sV, &tOrV[0][0][0][0][0], &tOrO[0][0][0][0][0]);
 
     // Before next iteration, K_next must be ready in sK.
     if (k_tile + 1 < num_k_tiles) {
@@ -784,35 +782,34 @@ struct FlashAttnV2LaunchConfig {
       (kBlockM + 2 * kBlockN) * kHeadDim * sizeof(half);
 };
 
-template <int kHeadDim> struct FlashAttnV2A100Config {
+template <int kHeadDim> struct FlashAttnV2Sm80Config {
   static constexpr bool kSupported = false;
   static constexpr int kBlockMValue = 0;
   static constexpr int kBlockNValue = 0;
 };
 
-// Wired subset of the official FlashAttention SM80/A100 non-dropout configs.
+// Wired subset of the official FlashAttention SM80 non-dropout configs.
 // The official hdim96 config also uses 128x64x4, but this loader currently
 // requires kThreads % (kHeadDim / 8) == 0. Official hdim192/256 use 8 warps on
-// A100, while this handwritten kernel is fixed at 4 warps.
-template <> struct FlashAttnV2A100Config<32>
-    : FlashAttnV2LaunchConfig<32, 128, 128> {
+// large SM80 GPUs, while this handwritten kernel is fixed at 4 warps.
+template <>
+struct FlashAttnV2Sm80Config<32> : FlashAttnV2LaunchConfig<32, 128, 128> {
   static constexpr bool kSupported = true;
 };
 
-template <> struct FlashAttnV2A100Config<64>
-    : FlashAttnV2LaunchConfig<64, 128, 128> {
+template <>
+struct FlashAttnV2Sm80Config<64> : FlashAttnV2LaunchConfig<64, 128, 128> {
   static constexpr bool kSupported = true;
 };
 
-template <> struct FlashAttnV2A100Config<128>
-    : FlashAttnV2LaunchConfig<128, 128, 64> {
+template <>
+struct FlashAttnV2Sm80Config<128> : FlashAttnV2LaunchConfig<128, 128, 64> {
   static constexpr bool kSupported = true;
 };
 
 template <int kHeadDim, int kBlockM, int kBlockN>
-inline cudaError_t
-launch_flash_attn_v2_config(FlashFwdParams<kHeadDim> params,
-                            cudaStream_t stream = 0) {
+inline cudaError_t launch_flash_attn_v2_config(FlashFwdParams<kHeadDim> params,
+                                               cudaStream_t stream = 0) {
   using Config = FlashAttnV2LaunchConfig<kHeadDim, kBlockM, kBlockN>;
   static_assert(kHeadDim >= 16);
   static_assert(kHeadDim % 16 == 0);
@@ -826,8 +823,7 @@ launch_flash_attn_v2_config(FlashFwdParams<kHeadDim> params,
   static_assert(Config::kThreads % kVecsPerRow == 0);
   static_assert(kBlockM % kRowsPerLoadIter == 0);
   static_assert(kBlockN % kRowsPerLoadIter == 0);
-  static_assert((kBlockM * kHeadDim / kElementsPerAccess) %
-                    Config::kThreads ==
+  static_assert((kBlockM * kHeadDim / kElementsPerAccess) % Config::kThreads ==
                 0);
   static_assert(kBlockM % (16 * Config::kWarps) == 0);
   static_assert(kBlockN % 16 == 0);
@@ -858,12 +854,12 @@ launch_flash_attn_v2_config(FlashFwdParams<kHeadDim> params,
 }
 
 template <int kHeadDim>
-inline cudaError_t launch_flash_attn_v2_a100(FlashFwdParams<kHeadDim> params,
+inline cudaError_t launch_flash_attn_v2_sm80(FlashFwdParams<kHeadDim> params,
                                              cudaStream_t stream = 0) {
-  using Config = FlashAttnV2A100Config<kHeadDim>;
+  using Config = FlashAttnV2Sm80Config<kHeadDim>;
   static_assert(
       Config::kSupported,
-      "A100 launch config is wired for head_dim 32, 64, and 128 in this "
+      "SM80 launch config is wired for head_dim 32, 64, and 128 in this "
       "handwritten kernel.");
 
   return launch_flash_attn_v2_config<kHeadDim, Config::kBlockMValue,
@@ -871,3 +867,5 @@ inline cudaError_t launch_flash_attn_v2_a100(FlashFwdParams<kHeadDim> params,
 }
 
 } // namespace fav2_sm80
+
+} // namespace sm80_flash_attn_v2

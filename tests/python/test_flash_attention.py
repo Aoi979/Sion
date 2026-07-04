@@ -59,7 +59,7 @@ run_flash_attention_case(
     "flash_attention_smoke",
     batch=1,
     heads=1,
-    seq_len=64,
+    seq_len=128,
     head_dim=64,
     scale=0.1,
     atol=2e-2,
@@ -68,9 +68,9 @@ run_flash_attention_case(
 )
 
 torch.manual_seed(0)
-Q = (torch.randn((1, 1, 64, 64), device="cuda", dtype=torch.float16) * 0.1).requires_grad_(True)
-K = (torch.randn((1, 1, 64, 64), device="cuda", dtype=torch.float16) * 0.1).requires_grad_(True)
-V = (torch.randn((1, 1, 64, 64), device="cuda", dtype=torch.float16) * 0.1).requires_grad_(True)
+Q = (torch.randn((1, 1, 128, 64), device="cuda", dtype=torch.float16) * 0.1).requires_grad_(True)
+K = (torch.randn((1, 1, 128, 64), device="cuda", dtype=torch.float16) * 0.1).requires_grad_(True)
+V = (torch.randn((1, 1, 128, 64), device="cuda", dtype=torch.float16) * 0.1).requires_grad_(True)
 loss = sion.flash_attention(Q, K, V).float().sum()
 loss.backward()
 assert Q.grad is not None

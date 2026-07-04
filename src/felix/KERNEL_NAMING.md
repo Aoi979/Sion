@@ -12,7 +12,7 @@ Examples:
 sm80_sgemm_f32_nn_m128n128k8_stage5
 sm80_hgemm_f16_nn_m128n128k64_fp32acc
 sm90_hgemm_f16_nn_m128n128k64_pingpong
-sm80_flash_attn_f16_hd64_bq64_bk64_mma16168_s2_1d
+sm80_flash_attn_f16_hd64_bq128_bk128_mma16816_v2
 cuda_topk_f32_radix_select
 ```
 

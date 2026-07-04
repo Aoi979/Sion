@@ -169,7 +169,8 @@ bool supports_flash_attn(const FlashAttnKernelMetadata &metadata,
   if (metadata.head_dim != 0 && metadata.head_dim != key.head_dim) {
     return false;
   }
-  if (metadata.block_k != 0 && metadata.block_k != key.block_k) {
+  if (key.block_k != 0 && metadata.block_k != 0 &&
+      metadata.block_k != key.block_k) {
     return false;
   }
   if (metadata.seq_len_multiple != 0 &&
@@ -516,7 +517,7 @@ FelixStatus flash_attn_f16_launch<64, 64>(half *Q, half *K, half *V, half *O,
     return status;
   }
 
-  const FlashAttnDispatchKey key{64, 64, QKV_seqlen, device};
+  const FlashAttnDispatchKey key{64, 0, QKV_seqlen, device};
   auto *entry = select_flash_attn_kernel(key);
   if (entry == nullptr) {
     return no_matching_flash_attn_kernel(key);
@@ -536,7 +537,7 @@ FelixStatus flash_attn_f16_launch<128, 64>(half *Q, half *K, half *V, half *O,
     return status;
   }
 
-  const FlashAttnDispatchKey key{128, 64, QKV_seqlen, device};
+  const FlashAttnDispatchKey key{128, 0, QKV_seqlen, device};
   auto *entry = select_flash_attn_kernel(key);
   if (entry == nullptr) {
     return no_matching_flash_attn_kernel(key);
@@ -556,7 +557,7 @@ FelixStatus flash_attn_f16_launch_by_name<64, 64>(
     return status;
   }
 
-  const FlashAttnDispatchKey key{64, 64, QKV_seqlen, device};
+  const FlashAttnDispatchKey key{64, 0, QKV_seqlen, device};
   auto *entry = checked_named_flash_attn_kernel(kernel_name, key, status);
   if (entry == nullptr) {
     return status;
@@ -576,7 +577,7 @@ FelixStatus flash_attn_f16_launch_by_name<128, 64>(
     return status;
   }
 
-  const FlashAttnDispatchKey key{128, 64, QKV_seqlen, device};
+  const FlashAttnDispatchKey key{128, 0, QKV_seqlen, device};
   auto *entry = checked_named_flash_attn_kernel(kernel_name, key, status);
   if (entry == nullptr) {
     return status;
