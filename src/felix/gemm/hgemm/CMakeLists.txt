@@ -4,6 +4,7 @@ target_sources(felix PRIVATE
     launchers/sm80_hgemm_f16_nn_m128n128k64_fp16acc.cu
     launchers/sm80_hgemm_f16_nn_m128n128k64_fp32acc.cu
     launchers/sm80_hgemm_f16_nn_m128n256k64_fp16acc.cu
+    launchers/sm80_hgemm_f16_nn_m128n256k64_fp32acc.cu
     launchers/sm80_hgemm_f16_nn_m128n256k64_splitk_fp32acc.cu
     launchers/sm80_hgemm_f16_nn_m128n256k64_splitk_atomic_fp32acc.cu
     launchers/sm80_hgemm_f16_nn_m128n256k64_streamk_fp32acc.cu
