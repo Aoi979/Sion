@@ -3,6 +3,9 @@
 /cmake-build-*/
 /out/
 
+# Local editor configuration
+/.vscode/
+
 # Local tool caches
 /.cache/
 /.clangd/
@@ -14,17 +17,18 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
-/python/sion*.so
-/python/sion/*.so
+/python/cuda_ops*.so
+/python/cuda_ops/*.so
 
 # Generated reports and scratch output
 /draw/
+/docs/
 /*.log
 /sgemm_report.md
 /hgemm_tc_report.md
 /benchmarks/results/*
 !/benchmarks/results/.gitkeep
 
-# External kernel drop-in directories copied into src/felix.
+# External kernel drop-in directories copied into src/cuda_ops_core.
 /my_kernel_sm80/
 /my_kernels_sm90/

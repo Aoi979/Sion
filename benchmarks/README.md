@@ -1,10 +1,10 @@
-# Sion Benchmarks
+# CudaOps Benchmarks
 
 The benchmark stack separates three timing layers:
 
 - `raw`: direct low-level CUDA launch for kernels that expose a prepared path.
-- `felix`: public Felix launch API, including dispatch and launcher glue.
-- `torch`: `torch.ops.sion.*` or Python wrapper entry points.
+- `cuda_ops_core`: public CudaOpsCore launch API, including dispatch and launcher glue.
+- `torch`: `torch.ops.cuda_ops.*` or Python wrapper entry points.
 
 Metrics are intentionally separate:
 
@@ -15,13 +15,13 @@ Metrics are intentionally separate:
 Build:
 
 ```bash
-cmake --build build-pytorch --target sion_bench -- -j2
+cmake --build build-pytorch --target cuda_ops_bench -- -j2
 ```
 
 Run one native case:
 
 ```bash
-build-pytorch/benchmarks/sion_bench \
+build-pytorch/benchmarks/cuda_ops_bench \
   --op flash_attention \
   --layer raw \
   --shape 1x1x128x64 \

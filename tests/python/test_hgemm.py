@@ -3,7 +3,7 @@ import sys
 
 try:
     import torch
-    import sion
+    import cuda_ops
     from correctness_common import assert_close_with_stats, clear_cuda_cache, require_cuda
 except ModuleNotFoundError as exc:
     print(f"skip: missing Python dependency: {exc}", file=sys.stderr)
@@ -36,9 +36,9 @@ def run_hgemm_case(
     ref = hgemm_ref(a, b, alpha, beta)
 
     if nt:
-        out = torch.ops.sion.hgemm_nt(a, b.transpose(0, 1).contiguous(), alpha, beta)
+        out = torch.ops.cuda_ops.hgemm_nt(a, b.transpose(0, 1).contiguous(), alpha, beta)
     else:
-        out = sion.hgemm(a, b, alpha, beta)
+        out = cuda_ops.hgemm(a, b, alpha, beta)
 
     assert_close_with_stats(name, out, ref, atol=atol, rtol=rtol)
     del a, b, ref, out
@@ -55,15 +55,15 @@ A = torch.randn((128, 64), device="cuda", dtype=torch.float16) * 0.1
 B = torch.randn((64, 128), device="cuda", dtype=torch.float16) * 0.1
 REF = (A.float() @ B.float()).half()
 
-OUT = sion.hgemm(A, B, 1.0, 0.0)
-assert_close_with_stats("sion.hgemm.smoke", OUT, REF, atol=3e-2, rtol=3e-2)
+OUT = cuda_ops.hgemm(A, B, 1.0, 0.0)
+assert_close_with_stats("cuda_ops.hgemm.smoke", OUT, REF, atol=3e-2, rtol=3e-2)
 
-OUT_OPS = torch.ops.sion.hgemm(A, B, 1.0, 0.0)
-assert_close_with_stats("torch.ops.sion.hgemm.smoke", OUT_OPS, REF, atol=3e-2, rtol=3e-2)
+OUT_OPS = torch.ops.cuda_ops.hgemm(A, B, 1.0, 0.0)
+assert_close_with_stats("torch.ops.cuda_ops.hgemm.smoke", OUT_OPS, REF, atol=3e-2, rtol=3e-2)
 
 A_grad = A.detach().clone().requires_grad_(True)
 B_grad = B.detach().clone().requires_grad_(True)
-loss = sion.hgemm(A_grad, B_grad).float().sum()
+loss = cuda_ops.hgemm(A_grad, B_grad).float().sum()
 loss.backward()
 assert A_grad.grad is not None
 assert B_grad.grad is not None

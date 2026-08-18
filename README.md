@@ -1,107 +1,58 @@
-# Sion
-> ⚠️ Early development stage. Features are limited and high performance is not guaranteed.
+# CudaOps
 
-Sion is a high-performance CUDA AI operator library, focusing on GPU implementations of core deep learning operators. It aims for extreme performance and numerical stability.
+CudaOps is an experimental CUDA operator library for exploring handwritten and CuTe-based GPU kernels.
 
-The project is organized into two layers:
-- **felix** – core CUDA operator implementations
-- **sion** – Libtorch-based wrapper layer with Python bindings
+## Build
 
-
-💡 The name is inspired by the character Sion from the game *Eden**.
-
-🌐 [中文版 README_CN.md](README_CN.md)
-
-
-## Supported
-
-- **SGEMM** (**SIMT**)
-
-## Partially Supported
-
-- **Flash Attention** (**Ampere**)  
-  Currently only supports FP16. Shapes must be aligned. Features like **mask** are not supported.
-
-- **HGEMM** (**Ampere**)  
-  Supports only problem sizes divisible by (M, N, K) = (128, 128, 64).
-  
-  
-## Requirements
-
-- **C++20**
-- **CUDA 13.1+**
-- **Libtorch** (PyTorch C++ API)
-- **CMake 4.0+**
-
-## Build Instructions
+Requirements: C++20, CUDA 13.1+, CMake 4.0+, Ninja, and LibTorch.
 
 ```bash
-git clone https://github.com/Aoi979/Sion.git
-cd sion
-mkdir build && cd build
-cmake -G Ninja ..
-ninja
+git clone https://github.com/Aoi979/CudaOps.git
+cd CudaOps
+cmake -S . -B build -G Ninja
+cmake --build build
 ```
-To enable Python bindings:
+
+To build the Python bindings:
+
 ```bash
-cmake -G Ninja -DBUILD_PYTHON_BINDING=ON ..
+cmake -S . -B build -G Ninja -DBUILD_PYTHON_BINDING=ON
+cmake --build build
 ```
 
-## Installation
-After building Sion, install it with:
-```bash
-ninja install
-```
+## API
 
-## Usage
-### C++
-#### Felix
-```CMake
-find_package(Felix REQUIRED)
+The Python API follows the PyTorch tensor style:
 
-target_link_libraries(your_target
-    PRIVATE
-        Felix::felix
-)
-```
-#### Sion
-```CMake
-find_package(Sion REQUIRED)
-
-target_link_libraries(your_target
-    PRIVATE
-        Sion::sion
-)
-```
-### Python
-Build with `-DBUILD_PYTHON_BINDING=ON`.
-
-Example:
 ```python
 import torch
-import sion
+import cuda_ops
 
 A = torch.randn(128, 256, device="cuda")
 B = torch.randn(256, 512, device="cuda")
-
-C = sion.sgemm(A, B)
+C = cuda_ops.sgemm(A, B)
 ```
-## Contributing
 
-Sion is currently a small experimental project.
+Available operators include `gemm`, `sgemm`, `hgemm`, `hgemm_nt`, and `flash_attention`.
 
-If you're interested in GPU kernel design or high-performance operator implementation,
-feel free to contribute.
+For C++:
 
-Implementations can be:
+```cmake
+find_package(CudaOps REQUIRED)
+target_link_libraries(your_target PRIVATE CudaOps::cuda_ops)
+```
 
-- Pure handwritten CUDA kernels
-- Built with CuTe
+The C++ API accepts and returns LibTorch tensors:
 
-Please avoid wrapping existing high-level libraries (e.g. cuBLAS, cuDNN, etc.).
-The goal is to explore operator implementations from scratch.
+```cpp
+#include <cuda_ops/cuda_ops.hpp>
 
-Discussions, ideas, and improvements are all welcome.
+torch::Tensor a = torch::randn(
+    {128, 256},
+    torch::TensorOptions().device(torch::kCUDA).dtype(torch::kFloat32));
+torch::Tensor b = torch::randn(
+    {256, 512},
+    torch::TensorOptions().device(torch::kCUDA).dtype(torch::kFloat32));
 
-## License
-Sion is released under the MIT License. See [LICENSE](LICENSE) for details.
+torch::Tensor c = cuda_ops::sgemm(a, b, 1.0f, 0.0f);
+```

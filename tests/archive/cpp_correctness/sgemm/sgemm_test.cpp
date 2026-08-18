@@ -1,4 +1,4 @@
-#include <sion/sion.hpp>
+#include <cuda_ops/cuda_ops.hpp>
 #include "../common.hpp"
 torch::Tensor sgemm_ref(const torch::Tensor &A, const torch::Tensor &B,
                         float alpha, float beta) {
@@ -24,13 +24,13 @@ torch::Tensor sgemm_op(const torch::Tensor &A, const torch::Tensor &B, float alp
   const int64_t M = A.size(0);
   const int64_t K = A.size(1);
   const int64_t N = B.size(1);
-  return sion::sgemm(A, B, alpha, beta);
+  return cuda_ops::sgemm(A, B, alpha, beta);
 }
 
-SION_TEST(test_sgemm_basic0) {
+CUDA_OPS_TEST(test_sgemm_basic0) {
   int M = 2048, K = 2048, N = 2048;
 
-  SION_CHECK(torch::cuda::is_available());
+  CUDA_OPS_CHECK(torch::cuda::is_available());
 
   auto opts =
       torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCUDA);
@@ -40,14 +40,14 @@ SION_TEST(test_sgemm_basic0) {
 
   auto ref = sgemm_ref(A, B, 1, 1);
   auto val = sgemm_op(A, B, 1, 1);
-  auto stats = sion::test::compare_tensor(ref, val);
-  sion::test::add_record("sgemm_basic0", ref.numel(), stats, 1e-3);
+  auto stats = cuda_ops::test::compare_tensor(ref, val);
+  cuda_ops::test::add_record("sgemm_basic0", ref.numel(), stats, 1e-3);
 }
 
-SION_TEST(test_sgemm_basic1){
+CUDA_OPS_TEST(test_sgemm_basic1){
      int M = 2048, K = 1024, N = 1536;
 
-    SION_CHECK(torch::cuda::is_available());
+    CUDA_OPS_CHECK(torch::cuda::is_available());
 
     auto opts = torch::TensorOptions()
         .dtype(torch::kFloat32)
@@ -58,14 +58,14 @@ SION_TEST(test_sgemm_basic1){
 
     auto ref = sgemm_ref(A, B, 1, 1);
     auto val = sgemm_op(A, B, 1, 1);
-    auto stats = sion::test::compare_tensor(ref, val);
-    sion::test::add_record("sgemm_basic1", ref.numel(), stats, 1e-3);
+    auto stats = cuda_ops::test::compare_tensor(ref, val);
+    cuda_ops::test::add_record("sgemm_basic1", ref.numel(), stats, 1e-3);
 }
 
-// SION_TEST(test_sgemm_basic2){
+// CUDA_OPS_TEST(test_sgemm_basic2){
 //      int M = 4096, K = 4096, N = 4096;
 
-//     SION_CHECK(torch::cuda::is_available());
+//     CUDA_OPS_CHECK(torch::cuda::is_available());
 
 //     auto opts = torch::TensorOptions()
 //         .dtype(torch::kFloat32)
@@ -76,14 +76,14 @@ SION_TEST(test_sgemm_basic1){
 
 //     auto ref = sgemm_ref(A, B, 2, 2);
 //     auto val = sgemm_op(A, B, 2, 2);
-//     auto stats = sion::test::compare_tensor(ref, val);
-//     sion::test::add_record("sgemm_basic2", ref.numel(), stats, 1e-3);
+//     auto stats = cuda_ops::test::compare_tensor(ref, val);
+//     cuda_ops::test::add_record("sgemm_basic2", ref.numel(), stats, 1e-3);
 // }
 
-// SION_TEST(test_sgemm_unaligned0){
+// CUDA_OPS_TEST(test_sgemm_unaligned0){
 //      int M = 2112, K = 2048, N = 2112;
 
-//     SION_CHECK(torch::cuda::is_available());
+//     CUDA_OPS_CHECK(torch::cuda::is_available());
 
 //     auto opts = torch::TensorOptions()
 //         .dtype(torch::kFloat32)
@@ -94,14 +94,14 @@ SION_TEST(test_sgemm_basic1){
 
 //     auto ref = sgemm_ref(A, B, 1, 1);
 //     auto val = sgemm_op(A, B, 1, 1);
-//     auto stats = sion::test::compare_tensor(ref, val, 1e-6);
-//     sion::test::add_record("sgemm_unaligned0", ref.numel(), stats, 1e-6);
+//     auto stats = cuda_ops::test::compare_tensor(ref, val, 1e-6);
+//     cuda_ops::test::add_record("sgemm_unaligned0", ref.numel(), stats, 1e-6);
 // }
 
-// SION_TEST(test_sgemm_unaligned1){
+// CUDA_OPS_TEST(test_sgemm_unaligned1){
 //      int M = 2049, K = 2048, N = 2049;
 
-//     SION_CHECK(torch::cuda::is_available());
+//     CUDA_OPS_CHECK(torch::cuda::is_available());
 
 //     auto opts = torch::TensorOptions()
 //         .dtype(torch::kFloat32)
@@ -112,18 +112,18 @@ SION_TEST(test_sgemm_basic1){
 
 //     auto ref = sgemm_ref(A, B, 1, 1);
 //     auto val = sgemm_op(A, B, 1, 1);
-//     auto stats = sion::test::compare_tensor(ref, val, 1e-6);
-//     sion::test::add_record("sgemm_unaligned1", ref.numel(), stats, 1e-6);
+//     auto stats = cuda_ops::test::compare_tensor(ref, val, 1e-6);
+//     cuda_ops::test::add_record("sgemm_unaligned1", ref.numel(), stats, 1e-6);
 // }
 
 int main() {
   auto &tests = TestRegistry::inst().tests;
-  std::cout << "[Sion] running " << tests.size() << " tests\n";
+  std::cout << "[CudaOps] running " << tests.size() << " tests\n";
   for (auto &[name, fn] : tests) {
     std::cout << "  - " << name << std::endl;
     fn();
   }
-  std::cout << "[Sion] all tests completed, please check the report\n";
-  sion::test::write_report("sgemm_report.md");
+  std::cout << "[CudaOps] all tests completed, please check the report\n";
+  cuda_ops::test::write_report("sgemm_report.md");
   return 0;
 }

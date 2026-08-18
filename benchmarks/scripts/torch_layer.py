@@ -6,7 +6,7 @@ import statistics
 import time
 
 import torch
-import sion  # noqa: F401 - importing loads sion._C and registers torch.ops
+import cuda_ops  # noqa: F401 - importing loads cuda_ops._C and registers torch.ops
 
 
 def summarize(values):
@@ -49,8 +49,8 @@ def make_callable(op, shape, api):
         b = torch.zeros((k, n), device="cuda", dtype=torch.float32)
         work = 2.0 * m * n * k
         if api == "wrapper":
-            return lambda: sion.sgemm(a, b), work, "sion.sgemm"
-        return lambda: torch.ops.sion.sgemm(a, b, 1.0, 0.0), work, "torch.ops.sion.sgemm"
+            return lambda: cuda_ops.sgemm(a, b), work, "cuda_ops.sgemm"
+        return lambda: torch.ops.cuda_ops.sgemm(a, b, 1.0, 0.0), work, "torch.ops.cuda_ops.sgemm"
 
     if op == "hgemm":
         if len(shape) != 3:
@@ -60,8 +60,8 @@ def make_callable(op, shape, api):
         b = torch.zeros((k, n), device="cuda", dtype=torch.float16)
         work = 2.0 * m * n * k
         if api == "wrapper":
-            return lambda: sion.hgemm(a, b), work, "sion.hgemm"
-        return lambda: torch.ops.sion.hgemm(a, b, 1.0, 0.0), work, "torch.ops.sion.hgemm"
+            return lambda: cuda_ops.hgemm(a, b), work, "cuda_ops.hgemm"
+        return lambda: torch.ops.cuda_ops.hgemm(a, b, 1.0, 0.0), work, "torch.ops.cuda_ops.hgemm"
 
     if op == "flash_attention":
         if len(shape) != 4:
@@ -72,8 +72,8 @@ def make_callable(op, shape, api):
         v = torch.zeros_like(q)
         work = 4.0 * bsz * heads * seq * seq * dim
         if api == "wrapper":
-            return lambda: sion.flash_attention(q, k, v), work, "sion.flash_attention"
-        return lambda: torch.ops.sion.flash_attention(q, k, v), work, "torch.ops.sion.flash_attention"
+            return lambda: cuda_ops.flash_attention(q, k, v), work, "cuda_ops.flash_attention"
+        return lambda: torch.ops.cuda_ops.flash_attention(q, k, v), work, "torch.ops.cuda_ops.flash_attention"
 
     raise SystemExit(f"unsupported op: {op}")
 

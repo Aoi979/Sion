@@ -31,8 +31,8 @@ def build_env(build_dir):
     python_path = str(ROOT / "python")
     env["PYTHONPATH"] = python_path + os.pathsep + env.get("PYTHONPATH", "")
     ld_parts = [
-        str(build_dir / "src" / "sion"),
-        str(build_dir / "src" / "felix"),
+        str(build_dir / "src" / "cuda_ops"),
+        str(build_dir / "src" / "cuda_ops_core"),
     ]
     env["LD_LIBRARY_PATH"] = os.pathsep.join(ld_parts + [env.get("LD_LIBRARY_PATH", "")])
     return env
@@ -115,7 +115,7 @@ def main():
     parser.add_argument("--op")
     parser.add_argument("--shape")
     parser.add_argument("--kernel", default="auto")
-    parser.add_argument("--layers", default="felix")
+    parser.add_argument("--layers", default="cuda_ops_core")
     parser.add_argument("--build-dir", type=Path, default=ROOT / "build-pytorch")
     parser.add_argument("--binary", type=Path)
     parser.add_argument(
@@ -146,12 +146,12 @@ def main():
             }
         ]
 
-    binary = args.binary or args.build_dir / "benchmarks" / "sion_bench"
+    binary = args.binary or args.build_dir / "benchmarks" / "cuda_ops_bench"
     results = []
     for job in jobs:
         cfg = normalize_cfg(defaults, job, args)
         for layer in layer_list(job.get("layers", args.layers)):
-            if layer in ("raw", "felix"):
+            if layer in ("raw", "cuda_ops_core"):
                 results.append(run_native(binary, job, layer, cfg))
             elif layer == "torch":
                 results.append(run_torch(job, cfg, args.build_dir, args.python))

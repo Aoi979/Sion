@@ -8,7 +8,7 @@
 #include <sstream>
 #include <string>
 
-namespace sion::bench {
+namespace cuda_ops::bench {
 
 inline std::string json_escape(const std::string &s) {
   std::ostringstream out;
@@ -91,4 +91,4 @@ inline void write_result_json(std::ostream &out, const std::string &op,
   out << "}\n";
 }
 
-} // namespace sion::bench
+} // namespace cuda_ops::bench

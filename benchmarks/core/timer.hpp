@@ -7,7 +7,7 @@
 #include <functional>
 #include <vector>
 
-namespace sion::bench {
+namespace cuda_ops::bench {
 
 struct TimingConfig {
   int warmup = 10;
@@ -114,4 +114,4 @@ inline TimingResult run_timing(const LaunchFn &fn, const TimingConfig &cfg,
   return result;
 }
 
-} // namespace sion::bench
+} // namespace cuda_ops::bench

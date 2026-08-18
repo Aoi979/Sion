@@ -10,13 +10,13 @@
       "op": "flash_attention",
       "shape": "1x1x128x64",
       "kernel": "sm80_flash_attn_f16_hd64_bq128_bk128_mma16816_v2",
-      "layers": ["raw", "felix", "torch"]
+      "layers": ["raw", "cuda_ops_core", "torch"]
     },
     {
       "op": "flash_attention",
       "shape": "1x1x128x128",
       "kernel": "sm80_flash_attn_f16_hd128_bq128_bk64_mma16816_v2",
-      "layers": ["raw", "felix", "torch"]
+      "layers": ["raw", "cuda_ops_core", "torch"]
     }
   ]
 }

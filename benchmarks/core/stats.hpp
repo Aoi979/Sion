@@ -5,7 +5,7 @@
 #include <numeric>
 #include <vector>
 
-namespace sion::bench {
+namespace cuda_ops::bench {
 
 struct SeriesStats {
   double min = 0.0;
@@ -55,4 +55,4 @@ inline SeriesStats summarize(std::vector<double> values) {
   return stats;
 }
 
-} // namespace sion::bench
+} // namespace cuda_ops::bench

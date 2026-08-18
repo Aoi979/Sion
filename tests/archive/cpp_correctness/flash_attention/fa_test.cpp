@@ -1,5 +1,5 @@
 #include "../common.hpp"
-#include <sion/sion.hpp>
+#include <cuda_ops/cuda_ops.hpp>
 
 torch::Tensor SDPA_ref(const torch::Tensor& Q, const torch::Tensor& K, const torch::Tensor& V) {
     TORCH_CHECK(Q.is_cuda(), "Q must be CUDA tensor");
@@ -17,10 +17,10 @@ torch::Tensor SDPA_ref(const torch::Tensor& Q, const torch::Tensor& K, const tor
 }
 
 torch::Tensor SDPA_op(const torch::Tensor& Q, const torch::Tensor& K, const torch::Tensor& V) {
-    return sion::flash_attention(Q, K, V);
+    return cuda_ops::flash_attention(Q, K, V);
 }
 
-SION_TEST(test_SDPA_basic){
+CUDA_OPS_TEST(test_SDPA_basic){
     torch::manual_seed(0);
     torch::Device device(torch::kCUDA);
 
@@ -38,18 +38,18 @@ SION_TEST(test_SDPA_basic){
     auto V = scale * torch::randn({B, H, N, D}, opt);
     auto ref = SDPA_ref(Q, K, V);
     auto val = SDPA_op(Q, K, V);
-    auto stats = sion::test::compare_tensor(ref, val);
-    sion::test::add_record("SDPA_basic", ref.numel(), stats, 1e-2);
+    auto stats = cuda_ops::test::compare_tensor(ref, val);
+    cuda_ops::test::add_record("SDPA_basic", ref.numel(), stats, 1e-2);
 }
 
 int main(){
     auto& tests = TestRegistry::inst().tests;
-    std::cout << "[Sion] running " << tests.size() << " tests\n";
+    std::cout << "[CudaOps] running " << tests.size() << " tests\n";
     for(auto& [name, fn]: tests){
         std::cout << "  - " << name << std::endl;
         fn();
     }
-    std::cout << "[Sion] all tests completed, please check the report\n";
-    sion::test::write_report("SDPA_report.md");
+    std::cout << "[CudaOps] all tests completed, please check the report\n";
+    cuda_ops::test::write_report("SDPA_report.md");
     return 0;
 }

@@ -1,98 +1,58 @@
-# Sion
-> ⚠️ 当前处于早期开发阶段，功能较少，性能暂不保证。
- 
-Sion 是一个 高性能 CUDA AI 算子库，专注深度学习核心算子的 GPU 实现。追求极致性能与数值稳定性。
+# CudaOps
 
-本项目分为两个层级：
-- felix —— 核心 CUDA 算子实现层
-- sion —— 基于 Libtorch 的封装层，提供 Python 绑定
-
-💡 名称来源于游戏 *Eden** 中的角色 Sion
-
-🌐 [English README.md](README.md)
-## 已支持
-- **SGEMM** (**SIMT**)
-## 部分支持
-- **Flash Attention** (**Ampere**)  
-  目前仅支持 FP16, 形状必须对齐, 不支持 **mask**等特性。
-
-- **HGEMM** (**Ampere**)  
-  仅支持问题规模满足 (M, N, K) = (128, 128, 64) 整数倍。
-
-## 环境要求
-
-- **C++20**
-- **CUDA 13.1+**
-- **Libtorch**（PyTorch C++ API）
-- **CMake 4.0+**
+CudaOps 是一个用于探索手写 CUDA 与 CuTe kernel 的实验性算子库。
 
 ## 编译
 
+环境要求：C++20、CUDA 13.1+、CMake 4.0+、Ninja 和 LibTorch。
+
 ```bash
-git clone https://github.com/Aoi979/Sion.git
-cd sion
-mkdir build && cd build
-cmake -G Ninja ..
-ninja
+git clone https://github.com/Aoi979/CudaOps.git
+cd CudaOps
+cmake -S . -B build -G Ninja
+cmake --build build
 ```
-若需启用 Python 绑定：
+
+编译 Python 绑定：
+
 ```bash
-cmake -G Ninja -DBUILD_PYTHON_BINDING=ON ..
-```
-## 安装
-构建完成后，执行：
-```bash
-ninja install
+cmake -S . -B build -G Ninja -DBUILD_PYTHON_BINDING=ON
+cmake --build build
 ```
 
-## 使用方法
-### C++
-#### Felix
-```CMake
-find_package(Felix REQUIRED)
+## API
 
-target_link_libraries(your_target
-    PRIVATE
-        Felix::felix
-)
-```
-#### Sion
-```CMake
-find_package(Sion REQUIRED)
+Python API 遵循 PyTorch Tensor 风格：
 
-target_link_libraries(your_target
-    PRIVATE
-        Sion::sion
-)
-```
-### Python
-编译时开启 `-DBUILD_PYTHON_BINDING=ON`。
-
-示例：
-
-```pythonimport torch
-import sion
+```python
+import torch
+import cuda_ops
 
 A = torch.randn(128, 256, device="cuda")
 B = torch.randn(256, 512, device="cuda")
-
-C = sion.sgemm(A, B)
+C = cuda_ops.sgemm(A, B)
 ```
-## 贡献
 
-Sion 目前是一个小型的实验性项目。
+当前提供 `gemm`、`sgemm`、`hgemm`、`hgemm_nt` 和 `flash_attention`。
 
-如果你对 GPU Kernel 设计或高性能算子实现感兴趣，欢迎参与贡献。
+C++ 接口：
 
-实现方式可以是：
+```cmake
+find_package(CudaOps REQUIRED)
+target_link_libraries(your_target PRIVATE CudaOps::cuda_ops)
+```
 
-- 纯手写 CUDA Kernel
+C++ API 接受并返回 LibTorch Tensor：
 
-- 基于 CuTe 的实现
+```cpp
+#include <cuda_ops/cuda_ops.hpp>
 
-请避免直接封装现有高层算子库（如 cuBLAS、cuDNN 等）。
+torch::Tensor a = torch::randn(
+    {128, 256},
+    torch::TensorOptions().device(torch::kCUDA).dtype(torch::kFloat32));
+torch::Tensor b = torch::randn(
+    {256, 512},
+    torch::TensorOptions().device(torch::kCUDA).dtype(torch::kFloat32));
 
-本项目的目标是从底层实现算子。
-欢迎提出想法、讨论与改进建议。
-## 许可证
-Sion 采用 MIT 许可证发布。详情请参见 [LICENSE](LICENSE) 文件。
+torch::Tensor c = cuda_ops::sgemm(a, b, 1.0f, 0.0f);
+```

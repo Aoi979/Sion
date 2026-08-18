@@ -10,13 +10,13 @@
       "op": "sgemm",
       "shape": "1024x1024x1024",
       "kernel": "auto",
-      "layers": ["felix", "torch"]
+      "layers": ["cuda_ops_core", "torch"]
     },
     {
       "op": "hgemm",
       "shape": "1024x1024x1024",
       "kernel": "auto",
-      "layers": ["felix", "torch"]
+      "layers": ["cuda_ops_core", "torch"]
     }
   ]
 }

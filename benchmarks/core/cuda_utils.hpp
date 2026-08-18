@@ -7,7 +7,7 @@
 #include <stdexcept>
 #include <string>
 
-namespace sion::bench {
+namespace cuda_ops::bench {
 
 inline void cuda_check(cudaError_t err, const std::string &where) {
   if (err != cudaSuccess) {
@@ -103,4 +103,4 @@ private:
   std::size_t count_ = 0;
 };
 
-} // namespace sion::bench
+} // namespace cuda_ops::bench

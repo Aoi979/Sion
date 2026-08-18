@@ -4,7 +4,7 @@ import sys
 try:
     import torch
     import torch.nn.functional as F
-    import sion
+    import cuda_ops
     from correctness_common import assert_close_with_stats, clear_cuda_cache, require_cuda
 except ModuleNotFoundError as exc:
     print(f"skip: missing Python dependency: {exc}", file=sys.stderr)
@@ -32,11 +32,11 @@ def run_flash_attention_case(
     v = scale * torch.randn((batch, heads, seq_len, head_dim), device="cuda", dtype=torch.float16)
 
     ref = F.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=0.0)
-    out = sion.flash_attention(q, k, v)
+    out = cuda_ops.flash_attention(q, k, v)
     assert_close_with_stats(name, out, ref, atol=atol, rtol=rtol)
 
     if check_dispatcher:
-        out_ops = torch.ops.sion.flash_attention(q, k, v)
+        out_ops = torch.ops.cuda_ops.flash_attention(q, k, v)
         assert_close_with_stats(f"{name}.torch_ops", out_ops, ref, atol=atol, rtol=rtol)
 
     del q, k, v, ref, out
@@ -71,7 +71,7 @@ torch.manual_seed(0)
 Q = (torch.randn((1, 1, 128, 64), device="cuda", dtype=torch.float16) * 0.1).requires_grad_(True)
 K = (torch.randn((1, 1, 128, 64), device="cuda", dtype=torch.float16) * 0.1).requires_grad_(True)
 V = (torch.randn((1, 1, 128, 64), device="cuda", dtype=torch.float16) * 0.1).requires_grad_(True)
-loss = sion.flash_attention(Q, K, V).float().sum()
+loss = cuda_ops.flash_attention(Q, K, V).float().sum()
 loss.backward()
 assert Q.grad is not None
 assert K.grad is not None

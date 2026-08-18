@@ -14,12 +14,12 @@ struct TestAdder {
     }
 };
 
-#define SION_TEST(name) \
+#define CUDA_OPS_TEST(name) \
     void name(); \
-    static TestAdder _sion_test_adder_##name(#name, name); \
+    static TestAdder _cuda_ops_test_adder_##name(#name, name); \
     void name()
 
-#define SION_CHECK(x) \
+#define CUDA_OPS_CHECK(x) \
     do { \
         if(!(x)){ \
             std::cerr << "[FAIL] " << __FILE__ << ":" << __LINE__ << " check failed: " #x << std::endl; \

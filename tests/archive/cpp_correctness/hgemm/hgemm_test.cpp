@@ -1,4 +1,4 @@
-#include <sion/sion.hpp>
+#include <cuda_ops/cuda_ops.hpp>
 #include "../common.hpp"
 torch::Tensor hgemm_ref(const torch::Tensor &A, const torch::Tensor &B,
                         float alpha, float beta) {
@@ -25,7 +25,7 @@ torch::Tensor hgemm_op(const torch::Tensor &A, const torch::Tensor &B,
   const int64_t M = A.size(0);
   const int64_t K = A.size(1);
   const int64_t N = B.size(1);
-  return sion::hgemm(A, B, alpha, beta);
+  return cuda_ops::hgemm(A, B, alpha, beta);
 }
 
 torch::Tensor hgemm_nt_op(const torch::Tensor &A, const torch::Tensor &B,
@@ -33,13 +33,13 @@ torch::Tensor hgemm_nt_op(const torch::Tensor &A, const torch::Tensor &B,
   const int64_t M = A.size(0);
   const int64_t K = A.size(1);
   const int64_t N = B.size(1);
-  return sion::hgemm_nt(A, B, alpha, beta);
+  return cuda_ops::hgemm_nt(A, B, alpha, beta);
 }
 
-SION_TEST(test_hgemm_basic0) {
+CUDA_OPS_TEST(test_hgemm_basic0) {
   int M = 2048, K = 2048, N = 2048;
 
-  SION_CHECK(torch::cuda::is_available());
+  CUDA_OPS_CHECK(torch::cuda::is_available());
 
   auto opts =
       torch::TensorOptions().dtype(torch::kFloat16).device(torch::kCUDA);
@@ -49,14 +49,14 @@ SION_TEST(test_hgemm_basic0) {
 
   auto ref = hgemm_ref(A, B, 1, 0);
   auto val = hgemm_op(A, B, 1, 0);
-  auto stats = sion::test::compare_tensor(ref, val);
-  sion::test::add_record("hgemm_basic0", ref.numel(), stats, 100);
+  auto stats = cuda_ops::test::compare_tensor(ref, val);
+  cuda_ops::test::add_record("hgemm_basic0", ref.numel(), stats, 100);
 }
 
-SION_TEST(test_hgemm_nt_basic0) {
+CUDA_OPS_TEST(test_hgemm_nt_basic0) {
   int M = 2048, K = 2048, N = 2048;
 
-  SION_CHECK(torch::cuda::is_available());
+  CUDA_OPS_CHECK(torch::cuda::is_available());
 
   auto opts =
       torch::TensorOptions().dtype(torch::kFloat16).device(torch::kCUDA);
@@ -67,18 +67,18 @@ SION_TEST(test_hgemm_nt_basic0) {
 
   auto ref = hgemm_ref(A, B, 1, 0);
   auto val = hgemm_nt_op(A, B_t, 1, 0);
-  auto stats = sion::test::compare_tensor(ref, val);
-  sion::test::add_record("hgemm_nt_basic0", ref.numel(), stats, 100);
+  auto stats = cuda_ops::test::compare_tensor(ref, val);
+  cuda_ops::test::add_record("hgemm_nt_basic0", ref.numel(), stats, 100);
 }
 
 int main() {
   auto &tests = TestRegistry::inst().tests;
-  std::cout << "[Sion] running " << tests.size() << " tests\n";
+  std::cout << "[CudaOps] running " << tests.size() << " tests\n";
   for (auto &[name, fn] : tests) {
     std::cout << "  - " << name << std::endl;
     fn();
   }
-  std::cout << "[Sion] all tests completed, please check the report\n";
-  sion::test::write_report("hgemm_tc_report.md");
+  std::cout << "[CudaOps] all tests completed, please check the report\n";
+  cuda_ops::test::write_report("hgemm_tc_report.md");
   return 0;
 }

@@ -1,3 +1,3 @@
-add_subdirectory(felix)
-add_subdirectory(sion)
+add_subdirectory(cuda_ops_core)
+add_subdirectory(cuda_ops)
 

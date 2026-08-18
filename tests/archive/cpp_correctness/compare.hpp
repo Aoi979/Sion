@@ -5,7 +5,7 @@
 #include <vector>
 #include <algorithm>
 #include <fstream>
-namespace sion::test {
+namespace cuda_ops::test {
 
 struct ErrorStats {
     double max_abs = 0.0;
@@ -145,7 +145,7 @@ inline void add_record(const std::string& name, int64_t n, const ErrorStats& sta
     });
 }
 
-inline void write_report(const std::string& filename="sion_report.md"){
+inline void write_report(const std::string& filename="cuda_ops_report.md"){
     std::ofstream out(filename, std::ios::trunc);
     if(!out) return;
 
