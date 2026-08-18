@@ -375,8 +375,8 @@ __device__ __forceinline__ void compute_score_ss(half *sQ, half *sK,
                                                  float *tSrS_p) {
   static_assert(kHeadDim % 16 == 0);
   static_assert(MMA_K == kHeadDim / 16);
-  auto tSrQ = as_tensor<MMA_K, 2, 2, 2>(tSrQ_p);
-  auto tSrK = as_tensor<MMA_K, 2, 2, 2>(tSrK_p);
+  auto tSrQ = as_tensor<2, 2, 2, 2>(tSrQ_p);
+  auto tSrK = as_tensor<2, 2, 2, 2>(tSrK_p);
   auto tSrS = as_tensor<MMA_N, 2, 2, 2>(tSrS_p);
   int lane_id = threadIdx.x % 32;
   int tSsQ_row = lane_id % 16;
@@ -405,13 +405,15 @@ __device__ __forceinline__ void compute_score_ss(half *sQ, half *sK,
   }
 #pragma unroll
   for (int k = 0; k < MMA_K; k++) {
+    const int read_stage = k & 1;
     if (k < MMA_K - 1) {
       int k_next = k + 1;
+      const int write_stage = k_next & 1;
 #pragma unroll
       for (int m = 0; m < MMA_M; m++) {
         ldsm::x4<ldsm::N>(
-            tSrQ[m][k_next][0][0], tSrQ[m][k_next][0][1], tSrQ[m][k_next][1][0],
-            tSrQ[m][k_next][1][1],
+            tSrQ[m][write_stage][0][0], tSrQ[m][write_stage][0][1],
+            tSrQ[m][write_stage][1][0], tSrQ[m][write_stage][1][1],
             &sQ[(m * (kBlockM / MMA_M) + warp_id * 16 + tSsQ_row) *
                     kQSmemStride +
                 tSsQ_col * 8 + k_next * 16]);
@@ -419,8 +421,8 @@ __device__ __forceinline__ void compute_score_ss(half *sQ, half *sK,
 #pragma unroll
       for (int n = 0; n < MMA_N; n++) {
         ldsm::x4<ldsm::N>(
-            tSrK[n][k_next][0][0], tSrK[n][k_next][0][1], tSrK[n][k_next][1][0],
-            tSrK[n][k_next][1][1],
+            tSrK[n][write_stage][0][0], tSrK[n][write_stage][0][1],
+            tSrK[n][write_stage][1][0], tSrK[n][write_stage][1][1],
             &sK[(n * (kBlockN / MMA_N) + tSsK_row) * kKSmemStride +
                 tSsK_col * 8 + k_next * 16]);
       }
@@ -432,15 +434,17 @@ __device__ __forceinline__ void compute_score_ss(half *sQ, half *sK,
       for (int n = 0; n < MMA_N; n++) {
         mma::m16n8k16_f32f16f16f32_accum(
             tSrS[m][n][0][0][0], tSrS[m][n][0][0][1], tSrS[m][n][0][1][0],
-            tSrS[m][n][0][1][1], tSrQ[m][k][0][0], tSrQ[m][k][0][1],
-            tSrQ[m][k][1][0], tSrQ[m][k][1][1], tSrK[n][k][0][0],
-            tSrK[n][k][0][1]);
+            tSrS[m][n][0][1][1], tSrQ[m][read_stage][0][0],
+            tSrQ[m][read_stage][0][1], tSrQ[m][read_stage][1][0],
+            tSrQ[m][read_stage][1][1], tSrK[n][read_stage][0][0],
+            tSrK[n][read_stage][0][1]);
 
         mma::m16n8k16_f32f16f16f32_accum(
             tSrS[m][n][1][0][0], tSrS[m][n][1][0][1], tSrS[m][n][1][1][0],
-            tSrS[m][n][1][1][1], tSrQ[m][k][0][0], tSrQ[m][k][0][1],
-            tSrQ[m][k][1][0], tSrQ[m][k][1][1], tSrK[n][k][1][0],
-            tSrK[n][k][1][1]);
+            tSrS[m][n][1][1][1], tSrQ[m][read_stage][0][0],
+            tSrQ[m][read_stage][0][1], tSrQ[m][read_stage][1][0],
+            tSrQ[m][read_stage][1][1], tSrK[n][read_stage][1][0],
+            tSrK[n][read_stage][1][1]);
       }
     }
   }
@@ -454,7 +458,7 @@ __device__ __forceinline__ void compute_output_rs(half *tOrP_p, half *sV,
   static_assert(MMA_N == kBlockN / 16);
   auto tOrP = as_tensor<MMA_N, 2, 2, 2>(tOrP_p);
   auto tOrO = as_tensor<MMA_K, 2, 2, 2>(tOrO_p);
-  auto tOrV = as_tensor<MMA_N, 2, 2, 2>(tOrV_p);
+  auto tOrV = as_tensor<2, 2, 2, 2>(tOrV_p);
   int lane_id = threadIdx.x % 32;
   int tOsV_row = lane_id % 16;
   int tOsV_col = (lane_id / 16) * 8;
@@ -472,12 +476,17 @@ __device__ __forceinline__ void compute_output_rs(half *tOrP_p, half *sV,
 
 #pragma unroll
   for (int n = 0; n < MMA_N; n++) {
+    const int read_stage = n & 1;
+
     if (n < MMA_N - 1) {
       int n_next = n + 1;
+      const int write_stage = n_next & 1;
 #pragma unroll
       for (int k = 0; k < MMA_K; k++) {
-        ldsm::x4<ldsm::T>(tOrV[k][n_next][0][0], tOrV[k][n_next][0][1],
-                          tOrV[k][n_next][1][0], tOrV[k][n_next][1][1],
+        ldsm::x4<ldsm::T>(tOrV[k][write_stage][0][0],
+                          tOrV[k][write_stage][0][1],
+                          tOrV[k][write_stage][1][0],
+                          tOrV[k][write_stage][1][1],
                           &sV[k * (kHeadDim / MMA_K) + tOsV_col +
                               (tOsV_row + n_next * 16) * kVSmemStride]);
       }
@@ -489,13 +498,13 @@ __device__ __forceinline__ void compute_output_rs(half *tOrP_p, half *sV,
         mma::m16n8k16_f32f16f16f32_accum(
             tOrO[m][k][0][0][0], tOrO[m][k][0][0][1], tOrO[m][k][0][1][0],
             tOrO[m][k][0][1][1], tOrP[m][n][0][0], tOrP[m][n][0][1],
-            tOrP[m][n][1][0], tOrP[m][n][1][1], tOrV[k][n][0][0],
-            tOrV[k][n][0][1]);
+            tOrP[m][n][1][0], tOrP[m][n][1][1],
+            tOrV[k][read_stage][0][0], tOrV[k][read_stage][0][1]);
         mma::m16n8k16_f32f16f16f32_accum(
             tOrO[m][k][1][0][0], tOrO[m][k][1][0][1], tOrO[m][k][1][1][0],
             tOrO[m][k][1][1][1], tOrP[m][n][0][0], tOrP[m][n][0][1],
-            tOrP[m][n][1][0], tOrP[m][n][1][1], tOrV[k][n][1][0],
-            tOrV[k][n][1][1]);
+            tOrP[m][n][1][0], tOrP[m][n][1][1],
+            tOrV[k][read_stage][1][0], tOrV[k][read_stage][1][1]);
       }
     }
   }
@@ -669,17 +678,17 @@ compute_attn_1rowblock(const FlashFwdParams<kHeadDim> &params, const int bidb,
   // - Q/K/V/O base pointers are non-null and 16B-aligned.
   // - Q/K/V/O row strides are positive and multiples of 8 half elements.
 
-  // (MMA_M, MMA_K, CoreK, CoreM, Core)
-  half tSrQ[MMA_M][MMA_K][2][2][2];
-  // (MMA_N, MMA_K, CoreN, CoreK, Core)
-  half tSrK[MMA_N][MMA_K][2][2][2];
+  // (MMA_M, Stage=2, CoreK, CoreM, Core)
+  half tSrQ[MMA_M][2][2][2][2];
+  // (MMA_N, Stage=2, CoreN, CoreK, Core)
+  half tSrK[MMA_N][2][2][2][2];
   // (MMA_M, MMA_N, CoreN, CoreM, Core)
   float tSrS[MMA_M][MMA_N][2][2][2];
 
   // (MMA_M, MMA_N, CoreN, CoreM, Core)
   half tOrP[MMA_M][MMA_N][2][2][2];
-  // (MMA_K, MMA_N, CoreK, CoreN, Core)
-  half tOrV[MMA_K][MMA_N][2][2][2];
+  // (MMA_K, Stage=2, CoreK, CoreN, Core)
+  half tOrV[MMA_K][2][2][2][2];
   // (MMA_M, MMA_K, CoreK, CoreM, Core)
   float tOrO[MMA_M][MMA_K][2][2][2];
 
