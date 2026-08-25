@@ -31,3 +31,7 @@ if(CUDA_OPS_BUILD_SM90_KERNELS)
     )
     target_sources(cuda_ops_core PRIVATE $<TARGET_OBJECTS:cuda_ops_core_sm90_hgemm>)
 endif()
+
+if(CUDA_OPS_BUILD_MACA)
+    add_subdirectory(maca)
+endif()

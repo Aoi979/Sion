@@ -4,9 +4,13 @@
 #include <cuda_fp16.h>
 #include <cuda_runtime.h>
 
-#include "../detail/sm90_cluster.cuh"
-#include "../detail/sm90_mbarrier.cuh"
-#include "../detail/sm90_persistent_tile_scheduler.cuh"
+#include "../detail/sm90/cluster.cuh"
+#include "../detail/sm90/barrier.cuh"
+#include "../detail/sm90/scheduler.cuh"
+
+using namespace ::cuda_ops_core::detail::sm90::barrier;
+using namespace ::cuda_ops_core::detail::sm90::cluster;
+using namespace ::cuda_ops_core::detail::sm90::scheduler;
 
 constexpr int kWarpSize = 32;
 constexpr int kWarpGroupSize = 4 * kWarpSize;
@@ -347,10 +351,6 @@ store_accumulators_tma(SharedStorageT &smem, void const *tensor_map_c,
   }
 }
 
-// IMPORTANT: A matrix is K-major, B matrix is N-major
-// cluster shape is 1x2(M x N), so 2 CTAs in a cluster need same A matrix, TMA
-// CTA has 2 consumers, each one compute 64x256 tile so that complete the CTA
-// tile(128x256)
 __global__ __launch_bounds__(kCoopThreads) void hgemm_cooperative_kernel(
     int M, int N, int K, const __grid_constant__ CUtensorMap tensorMapA,
     const __grid_constant__ CUtensorMap tensorMapB,
@@ -441,8 +441,6 @@ __global__ __launch_bounds__(kCoopThreads) void hgemm_cooperative_kernel(
   } else {
     const int consumer_id = role == WarpGroupRole::Consumer0 ? 0 : 1;
     warpgroup_reg_alloc<232>();
-    // 8 is used because it is the number of registers each thread needs to
-    // support Core Matrix x4
     float accumulator[kCoopCtaN / 16][8];
     PipelineState<kCoopStages> smem_pipe_read;
     PipelineState<kCoopStages> smem_pipe_release = smem_pipe_read;
@@ -553,8 +551,6 @@ inline cudaError_t make_b_tensor_map(CUtensorMap *map, half const *ptr, int n,
   return map_cu_result(result);
 }
 
-// IMPORTANT: Enable TMA multicast!!!!!
-// A matrix is K-major
 inline cudaError_t make_a_tensor_map(CUtensorMap *map, half const *ptr, int m,
                                      int k) {
   // IMPORTANT: Cluster shape is 1 x 2 x 1 (M N K)

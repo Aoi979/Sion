@@ -1,11 +1,11 @@
 #pragma once
 
-#include "sm80_hgemm_f16_nn_accum_runtime.cuh"
+#include "runtime.cuh"
 #include <cuda_ops_core/core.hpp>
 #include <cuda_ops_core/registry.hpp>
 #include <string>
 
-namespace cuda_ops_core::detail {
+namespace cuda_ops_core::detail::sm80::launcher {
 
 template <typename Shape>
 inline Status validate_sm80_hgemm_f16_nn_accum(uint32_t M, uint32_t N,
@@ -44,4 +44,4 @@ inline GemmKernelMetadata sm80_hgemm_f16_nn_accum_metadata() {
           .requires_alpha_one_beta_zero = true};
 }
 
-} // namespace cuda_ops_core::detail
+} // namespace cuda_ops_core::detail::sm80::launcher

@@ -1,6 +1,11 @@
 #pragma once
 
-#include "../detail/sm80_hgemm_f16_nn_accum_common.cuh"
+#include "../detail/sm80/mma_macros.cuh"
+#include "../detail/sm80/tile.cuh"
+
+namespace cuda_ops_core::detail::sm80::fp32acc {
+using namespace ::cuda_ops_core::detail::sm80::common;
+using namespace ::cuda_ops_core::detail::sm80::tile;
 
 template <typename Shape_MNK = shape_mnk, int kStages, int kBlockSwizzle>
 __global__ void hgemm_f16f16f32_kernel(half *A, half *B, half *C, int M, int N,
@@ -52,7 +57,7 @@ __global__ void hgemm_f16f16f32_kernel(half *A, half *B, half *C, int M, int N,
 
   constexpr int MMA_M = kCtaM / Tiled_MMA_M;
   constexpr int MMA_N = kCtaN / Tiled_MMA_N;
-  constexpr int MMA_K = kCtaK / Tiled_MMA_K;
+  constexpr int kFragmentSlots = 2;
 
   constexpr int Fragment = 2;
   constexpr int CoreMatrix_M = 2;
@@ -61,13 +66,9 @@ __global__ void hgemm_f16f16f32_kernel(half *A, half *B, half *C, int M, int N,
 
   constexpr int kElementsPerAccess = 8; // half, 16B
 
-  // (MMA_M, MMA_N, CoreMatrix_N, CoreMatrix_M, Fragment)
-  // :
-  // (8 * MMA_N, 8, 4, 2, 1)
-
   float tCrC[MMA_M][MMA_N][CoreMatrix_N][CoreMatrix_M][Fragment];
-  half tCrA[MMA_M][MMA_K][CoreMatrix_K][CoreMatrix_M][Fragment];
-  half tCrB[MMA_N][MMA_K][CoreMatrix_N][CoreMatrix_K][Fragment];
+  half tCrA[kFragmentSlots][MMA_M][CoreMatrix_K][CoreMatrix_M][Fragment];
+  half tCrB[kFragmentSlots][MMA_N][CoreMatrix_N][CoreMatrix_K][Fragment];
 
 #pragma unroll
   for (int m = 0; m < MMA_M; ++m) {
@@ -191,18 +192,18 @@ __global__ void hgemm_f16f16f32_kernel(half *A, half *B, half *C, int M, int N,
                       &smem->buffer[smem_pipe_read].A[hgemm_smem::offset_A(
                           warp_m_id * 16 + ldsmx4_row + 0 * Tiled_MMA_M,
                           0 * Tiled_MMA_K + ldsmx4_col * 8)]);
-    ldsm::x4<ldsm::N>(as_u32(tCrA[1][0][0][0][0]), as_u32(tCrA[1][0][0][1][0]),
-                      as_u32(tCrA[1][0][1][0][0]), as_u32(tCrA[1][0][1][1][0]),
+    ldsm::x4<ldsm::N>(as_u32(tCrA[0][1][0][0][0]), as_u32(tCrA[0][1][0][1][0]),
+                      as_u32(tCrA[0][1][1][0][0]), as_u32(tCrA[0][1][1][1][0]),
                       &smem->buffer[smem_pipe_read].A[hgemm_smem::offset_A(
                           warp_m_id * 16 + ldsmx4_row + 1 * Tiled_MMA_M,
                           0 * Tiled_MMA_K + ldsmx4_col * 8)]);
-    ldsm::x4<ldsm::N>(as_u32(tCrA[2][0][0][0][0]), as_u32(tCrA[2][0][0][1][0]),
-                      as_u32(tCrA[2][0][1][0][0]), as_u32(tCrA[2][0][1][1][0]),
+    ldsm::x4<ldsm::N>(as_u32(tCrA[0][2][0][0][0]), as_u32(tCrA[0][2][0][1][0]),
+                      as_u32(tCrA[0][2][1][0][0]), as_u32(tCrA[0][2][1][1][0]),
                       &smem->buffer[smem_pipe_read].A[hgemm_smem::offset_A(
                           warp_m_id * 16 + ldsmx4_row + 2 * Tiled_MMA_M,
                           0 * Tiled_MMA_K + ldsmx4_col * 8)]);
-    ldsm::x4<ldsm::N>(as_u32(tCrA[3][0][0][0][0]), as_u32(tCrA[3][0][0][1][0]),
-                      as_u32(tCrA[3][0][1][0][0]), as_u32(tCrA[3][0][1][1][0]),
+    ldsm::x4<ldsm::N>(as_u32(tCrA[0][3][0][0][0]), as_u32(tCrA[0][3][0][1][0]),
+                      as_u32(tCrA[0][3][1][0][0]), as_u32(tCrA[0][3][1][1][0]),
                       &smem->buffer[smem_pipe_read].A[hgemm_smem::offset_A(
                           warp_m_id * 16 + ldsmx4_row + 3 * Tiled_MMA_M,
                           0 * Tiled_MMA_K + ldsmx4_col * 8)]);
@@ -211,18 +212,18 @@ __global__ void hgemm_f16f16f32_kernel(half *A, half *B, half *C, int M, int N,
                       &smem->buffer[smem_pipe_read].B[hgemm_smem::offset_B(
                           warp_n_id * 8 + Tiled_MMA_N * 0 + ldsmx4T_row * 16,
                           ldsmx4T_col + 0 * Tiled_MMA_K)]);
-    ldsm::x4<ldsm::T>(as_u32(tCrB[1][0][0][0][0]), as_u32(tCrB[1][0][0][1][0]),
-                      as_u32(tCrB[1][0][1][0][0]), as_u32(tCrB[1][0][1][1][0]),
+    ldsm::x4<ldsm::T>(as_u32(tCrB[0][1][0][0][0]), as_u32(tCrB[0][1][0][1][0]),
+                      as_u32(tCrB[0][1][1][0][0]), as_u32(tCrB[0][1][1][1][0]),
                       &smem->buffer[smem_pipe_read].B[hgemm_smem::offset_B(
                           warp_n_id * 8 + Tiled_MMA_N * 1 + ldsmx4T_row * 16,
                           ldsmx4T_col + 0 * Tiled_MMA_K)]);
-    ldsm::x4<ldsm::T>(as_u32(tCrB[2][0][0][0][0]), as_u32(tCrB[2][0][0][1][0]),
-                      as_u32(tCrB[2][0][1][0][0]), as_u32(tCrB[2][0][1][1][0]),
+    ldsm::x4<ldsm::T>(as_u32(tCrB[0][2][0][0][0]), as_u32(tCrB[0][2][0][1][0]),
+                      as_u32(tCrB[0][2][1][0][0]), as_u32(tCrB[0][2][1][1][0]),
                       &smem->buffer[smem_pipe_read].B[hgemm_smem::offset_B(
                           warp_n_id * 8 + Tiled_MMA_N * 2 + ldsmx4T_row * 16,
                           ldsmx4T_col + 0 * Tiled_MMA_K)]);
-    ldsm::x4<ldsm::T>(as_u32(tCrB[3][0][0][0][0]), as_u32(tCrB[3][0][0][1][0]),
-                      as_u32(tCrB[3][0][1][0][0]), as_u32(tCrB[3][0][1][1][0]),
+    ldsm::x4<ldsm::T>(as_u32(tCrB[0][3][0][0][0]), as_u32(tCrB[0][3][0][1][0]),
+                      as_u32(tCrB[0][3][1][0][0]), as_u32(tCrB[0][3][1][1][0]),
                       &smem->buffer[smem_pipe_read].B[hgemm_smem::offset_B(
                           warp_n_id * 8 + Tiled_MMA_N * 3 + ldsmx4T_row * 16,
                           ldsmx4T_col + 0 * Tiled_MMA_K)]);
@@ -283,74 +284,72 @@ __global__ void hgemm_f16f16f32_kernel(half *A, half *B, half *C, int M, int N,
       }
 
       int k_block_next = (k_block + 1) % K_BLOCK_MAX;
-      ldsm::x4<ldsm::N>(as_u32(tCrA[0][k_block_next][0][0][0]),
-                        as_u32(tCrA[0][k_block_next][0][1][0]),
-                        as_u32(tCrA[0][k_block_next][1][0][0]),
-                        as_u32(tCrA[0][k_block_next][1][1][0]),
+      int k_block_slot = k_block & 1;
+      int k_block_next_slot = k_block_next & 1;
+      ldsm::x4<ldsm::N>(as_u32(tCrA[k_block_next_slot][0][0][0][0]),
+                        as_u32(tCrA[k_block_next_slot][0][0][1][0]),
+                        as_u32(tCrA[k_block_next_slot][0][1][0][0]),
+                        as_u32(tCrA[k_block_next_slot][0][1][1][0]),
                         &smem->buffer[smem_pipe_read].A[hgemm_smem::offset_A(
                             warp_m_id * 16 + ldsmx4_row + 0 * Tiled_MMA_M,
                             k_block_next * Tiled_MMA_K + ldsmx4_col * 8)]);
-      ldsm::x4<ldsm::N>(as_u32(tCrA[1][k_block_next][0][0][0]),
-                        as_u32(tCrA[1][k_block_next][0][1][0]),
-                        as_u32(tCrA[1][k_block_next][1][0][0]),
-                        as_u32(tCrA[1][k_block_next][1][1][0]),
+      ldsm::x4<ldsm::N>(as_u32(tCrA[k_block_next_slot][1][0][0][0]),
+                        as_u32(tCrA[k_block_next_slot][1][0][1][0]),
+                        as_u32(tCrA[k_block_next_slot][1][1][0][0]),
+                        as_u32(tCrA[k_block_next_slot][1][1][1][0]),
                         &smem->buffer[smem_pipe_read].A[hgemm_smem::offset_A(
                             warp_m_id * 16 + ldsmx4_row + 1 * Tiled_MMA_M,
                             k_block_next * Tiled_MMA_K + ldsmx4_col * 8)]);
-      ldsm::x4<ldsm::N>(as_u32(tCrA[2][k_block_next][0][0][0]),
-                        as_u32(tCrA[2][k_block_next][0][1][0]),
-                        as_u32(tCrA[2][k_block_next][1][0][0]),
-                        as_u32(tCrA[2][k_block_next][1][1][0]),
+      ldsm::x4<ldsm::N>(as_u32(tCrA[k_block_next_slot][2][0][0][0]),
+                        as_u32(tCrA[k_block_next_slot][2][0][1][0]),
+                        as_u32(tCrA[k_block_next_slot][2][1][0][0]),
+                        as_u32(tCrA[k_block_next_slot][2][1][1][0]),
                         &smem->buffer[smem_pipe_read].A[hgemm_smem::offset_A(
                             warp_m_id * 16 + ldsmx4_row + 2 * Tiled_MMA_M,
                             k_block_next * Tiled_MMA_K + ldsmx4_col * 8)]);
-      ldsm::x4<ldsm::N>(as_u32(tCrA[3][k_block_next][0][0][0]),
-                        as_u32(tCrA[3][k_block_next][0][1][0]),
-                        as_u32(tCrA[3][k_block_next][1][0][0]),
-                        as_u32(tCrA[3][k_block_next][1][1][0]),
+      ldsm::x4<ldsm::N>(as_u32(tCrA[k_block_next_slot][3][0][0][0]),
+                        as_u32(tCrA[k_block_next_slot][3][0][1][0]),
+                        as_u32(tCrA[k_block_next_slot][3][1][0][0]),
+                        as_u32(tCrA[k_block_next_slot][3][1][1][0]),
                         &smem->buffer[smem_pipe_read].A[hgemm_smem::offset_A(
                             warp_m_id * 16 + ldsmx4_row + 3 * Tiled_MMA_M,
                             k_block_next * Tiled_MMA_K + ldsmx4_col * 8)]);
-      ldsm::x4<ldsm::T>(as_u32(tCrB[0][k_block_next][0][0][0]),
-                        as_u32(tCrB[0][k_block_next][0][1][0]),
-                        as_u32(tCrB[0][k_block_next][1][0][0]),
-                        as_u32(tCrB[0][k_block_next][1][1][0]),
+      ldsm::x4<ldsm::T>(as_u32(tCrB[k_block_next_slot][0][0][0][0]),
+                        as_u32(tCrB[k_block_next_slot][0][0][1][0]),
+                        as_u32(tCrB[k_block_next_slot][0][1][0][0]),
+                        as_u32(tCrB[k_block_next_slot][0][1][1][0]),
                         &smem->buffer[smem_pipe_read].B[hgemm_smem::offset_B(
                             warp_n_id * 8 + Tiled_MMA_N * 0 + ldsmx4T_row * 16,
                             ldsmx4T_col + k_block_next * Tiled_MMA_K)]);
-      ldsm::x4<ldsm::T>(as_u32(tCrB[1][k_block_next][0][0][0]),
-                        as_u32(tCrB[1][k_block_next][0][1][0]),
-                        as_u32(tCrB[1][k_block_next][1][0][0]),
-                        as_u32(tCrB[1][k_block_next][1][1][0]),
+      ldsm::x4<ldsm::T>(as_u32(tCrB[k_block_next_slot][1][0][0][0]),
+                        as_u32(tCrB[k_block_next_slot][1][0][1][0]),
+                        as_u32(tCrB[k_block_next_slot][1][1][0][0]),
+                        as_u32(tCrB[k_block_next_slot][1][1][1][0]),
                         &smem->buffer[smem_pipe_read].B[hgemm_smem::offset_B(
                             warp_n_id * 8 + Tiled_MMA_N * 1 + ldsmx4T_row * 16,
                             ldsmx4T_col + k_block_next * Tiled_MMA_K)]);
-      ldsm::x4<ldsm::T>(as_u32(tCrB[2][k_block_next][0][0][0]),
-                        as_u32(tCrB[2][k_block_next][0][1][0]),
-                        as_u32(tCrB[2][k_block_next][1][0][0]),
-                        as_u32(tCrB[2][k_block_next][1][1][0]),
+      ldsm::x4<ldsm::T>(as_u32(tCrB[k_block_next_slot][2][0][0][0]),
+                        as_u32(tCrB[k_block_next_slot][2][0][1][0]),
+                        as_u32(tCrB[k_block_next_slot][2][1][0][0]),
+                        as_u32(tCrB[k_block_next_slot][2][1][1][0]),
                         &smem->buffer[smem_pipe_read].B[hgemm_smem::offset_B(
                             warp_n_id * 8 + Tiled_MMA_N * 2 + ldsmx4T_row * 16,
                             ldsmx4T_col + k_block_next * Tiled_MMA_K)]);
-      ldsm::x4<ldsm::T>(as_u32(tCrB[3][k_block_next][0][0][0]),
-                        as_u32(tCrB[3][k_block_next][0][1][0]),
-                        as_u32(tCrB[3][k_block_next][1][0][0]),
-                        as_u32(tCrB[3][k_block_next][1][1][0]),
+      ldsm::x4<ldsm::T>(as_u32(tCrB[k_block_next_slot][3][0][0][0]),
+                        as_u32(tCrB[k_block_next_slot][3][0][1][0]),
+                        as_u32(tCrB[k_block_next_slot][3][1][0][0]),
+                        as_u32(tCrB[k_block_next_slot][3][1][1][0]),
                         &smem->buffer[smem_pipe_read].B[hgemm_smem::offset_B(
                             warp_n_id * 8 + Tiled_MMA_N * 3 + ldsmx4T_row * 16,
                             ldsmx4T_col + k_block_next * Tiled_MMA_K)]);
 
-      MMA_1_ROW_FP32(0);
-      MMA_1_ROW_FP32(1);
-      MMA_1_ROW_FP32(2);
-      MMA_1_ROW_FP32(3);
+      MMA_1_ROW_SLOT_FP32(0, k_block_slot);
+      MMA_1_ROW_SLOT_FP32(1, k_block_slot);
+      MMA_1_ROW_SLOT_FP32(2, k_block_slot);
+      MMA_1_ROW_SLOT_FP32(3, k_block_slot);
     }
     --k_tiles_to_compute;
   }
-
-  //
-  // Epilogue
-  //
 
   cp_async::wait_all();
   __syncthreads();
@@ -394,7 +393,9 @@ __global__ void hgemm_f16f16f32_kernel(half *A, half *B, half *C, int M, int N,
   static_assert(kEpilogueVecCount % kEpilogueThreads == 0,
                 "epilogue store schedule assumes full fixed-thread coverage");
   constexpr int kEpilogueStoreIterations = kEpilogueVecCount / kEpilogueThreads;
-  hgemm_epilogue::store_gmem_unrolled<0, kEpilogueStoreIterations, kCtaN,
-                                      kElementsPerAccess, kEpilogueThreads,
-                                      kSmemStrideC>(gC, sC, StrideC);
+  hgemm_epilogue::store_gmem_strided<kEpilogueStoreIterations, kCtaN,
+                                     kElementsPerAccess, kEpilogueThreads,
+                                     kSmemStrideC>(gC, sC, StrideC);
 }
+
+} // namespace cuda_ops_core::detail::sm80::fp32acc

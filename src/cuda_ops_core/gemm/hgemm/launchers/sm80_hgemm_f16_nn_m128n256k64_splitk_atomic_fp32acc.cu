@@ -11,9 +11,9 @@ namespace cuda_ops_core {
 namespace {
 
 namespace atomic_splitk =
-    detail::sm80_hgemm_128x256_splitk_atomic::n256_splitk_atomic;
+    detail::sm80::atomic_splitk;
 using AtomicSplitKShape =
-    detail::sm80_hgemm_128x256_splitk_atomic::shape_mnk_n256;
+    detail::sm80::tile::shape_mnk_n256;
 
 Status validate_atomic_splitk_request(
     uint32_t M, uint32_t N, uint32_t K, float alpha, float beta,
@@ -181,12 +181,10 @@ REGISTER_KERNEL(
          .max_cc = 89,
          .priority = 80,
          .required_dynamic_smem_bytes =
-             cuda_ops_core::detail::sm80_hgemm_128x256_splitk_atomic::
-                 n256_splitk_atomic::
-                     kAtomicSplitKSharedStorageBytes128x256,
+             cuda_ops_core::detail::sm80::atomic_splitk::
+                 kAtomicSplitKSharedStorageBytes128x256,
          .required_threads_per_block =
-             cuda_ops_core::detail::sm80_hgemm_128x256_splitk_atomic::
-                 n256_splitk_atomic::kAtomicSplitKThreads},
+             cuda_ops_core::detail::sm80::atomic_splitk::kAtomicSplitKThreads},
         {.layout = cuda_ops_core::KernelLayout::NN,
          .align_m = 128,
          .align_n = 256,

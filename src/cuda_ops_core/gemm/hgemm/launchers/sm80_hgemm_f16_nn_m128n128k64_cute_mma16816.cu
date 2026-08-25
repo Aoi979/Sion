@@ -34,8 +34,6 @@ Status sm80_hgemm_f16_nn_m128n128k64_cute_mma16816_launch(
   auto cta_tiler = make_shape(bM, bN, bK); // (BLK_M, BLK_N, BLK_K)
   auto bP = Int<3>{};                      // Pipeline
 
-  // Define the smem layouts (static)
-  // Swizzles for LDSM and 128b k-major loads
   auto swizzle_atom_a = composition(
       Swizzle<3, 3, 3>{},
       Layout<Shape<_8, Shape<_8, _8>>, Stride<_8, Stride<_1, _64>>>{});

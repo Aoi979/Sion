@@ -1,10 +1,13 @@
 #pragma once
 
-#include "../kernels/sm80_hgemm_f16_nn_m128n128k64_fp16acc.cuh"
-#include "../kernels/sm80_hgemm_f16_nn_m128n128k64_fp32acc.cuh"
-#include "../kernels/sm80_hgemm_f16_nn_m128n256k64_fp16acc.cuh"
+#include "../../kernels/sm80_hgemm_f16_nn_m128n128k64_fp16acc.cuh"
+#include "../../kernels/sm80_hgemm_f16_nn_m128n128k64_fp32acc.cuh"
+#include "../../kernels/sm80_hgemm_f16_nn_m128n256k64_fp16acc.cuh"
 
-namespace sm80_hgemm {
+namespace cuda_ops_core::detail::sm80::runtime {
+
+using namespace ::cuda_ops_core::detail::sm80::common;
+using namespace ::cuda_ops_core::detail::sm80::tile;
 
 constexpr int kStages = 3;
 constexpr int kBlockSwizzle = 8;
@@ -30,7 +33,7 @@ template <int BlockSwizzle>
 inline cudaError_t launch_hgemm_128x128x64_fp16acc(half *A, half *B, half *C,
                                                    int M, int N, int K,
                                                    cudaStream_t stream = 0) {
-  auto kernel_fptr = hgemm_f16f16f16_kernel<shape_mnk, kStages, BlockSwizzle>;
+  auto kernel_fptr = fp16acc::hgemm_f16f16f16_kernel<shape_mnk, kStages, BlockSwizzle>;
 
   cudaError_t err = cudaFuncSetAttribute(
       kernel_fptr, cudaFuncAttributeMaxDynamicSharedMemorySize,
@@ -102,7 +105,7 @@ inline cudaError_t launch_hgemm_128x256x64_fp16acc(half *A, half *B, half *C,
                                                    int M, int N, int K,
                                                    cudaStream_t stream = 0) {
   auto kernel_fptr =
-      n256::hgemm_f16f16f16_128x256_kernel<shape_mnk_n256, kStages,
+      fp16acc::m128n256::hgemm_f16f16f16_128x256_kernel<shape_mnk_n256, kStages,
                                            BlockSwizzle>;
 
   cudaError_t err = cudaFuncSetAttribute(
@@ -164,7 +167,7 @@ inline cudaError_t launch_hgemm_128x256x64_fp16acc(half *A, half *B, half *C,
 inline cudaError_t launch_hgemm_128x128x64_fp32acc(half *A, half *B, half *C,
                                                    int M, int N, int K,
                                                    cudaStream_t stream = 0) {
-  auto kernel_fptr = hgemm_f16f16f32_kernel<shape_mnk, kStages, kBlockSwizzle>;
+  auto kernel_fptr = fp32acc::hgemm_f16f16f32_kernel<shape_mnk, kStages, kBlockSwizzle>;
 
   cudaError_t err = cudaFuncSetAttribute(
       kernel_fptr, cudaFuncAttributeMaxDynamicSharedMemorySize,
@@ -187,4 +190,5 @@ inline cudaError_t launch_hgemm_128x128x64_fp32acc(half *A, half *B, half *C,
   return cudaGetLastError();
 }
 
-} // namespace sm80_hgemm
+} // namespace cuda_ops_core::detail::sm80::runtime
+

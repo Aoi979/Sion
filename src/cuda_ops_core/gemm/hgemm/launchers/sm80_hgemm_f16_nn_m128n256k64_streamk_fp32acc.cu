@@ -9,8 +9,8 @@
 namespace cuda_ops_core {
 namespace {
 
-namespace streamk = detail::sm80_hgemm_128x256_streamk::n256_streamk;
-using StreamKShape = detail::sm80_hgemm_128x256_streamk::shape_mnk_n256;
+namespace streamk = detail::sm80::streamk;
+using StreamKShape = detail::sm80::tile::shape_mnk_n256;
 
 Status validate_streamk_request(uint32_t M, uint32_t N, uint32_t K,
                                      float alpha, float beta, half const *A,
@@ -134,11 +134,10 @@ REGISTER_KERNEL(
          .max_cc = 89,
          .priority = 90,
          .required_dynamic_smem_bytes =
-             cuda_ops_core::detail::sm80_hgemm_128x256_streamk::
-                 n256_streamk::kStreamKSharedStorageBytes128x256,
+             cuda_ops_core::detail::sm80::streamk::
+                 kStreamKSharedStorageBytes128x256,
          .required_threads_per_block =
-             cuda_ops_core::detail::sm80_hgemm_128x256_streamk::n256_streamk::
-                 kStreamKThreads},
+             cuda_ops_core::detail::sm80::streamk::kStreamKThreads},
         {.layout = cuda_ops_core::KernelLayout::NN,
          .align_m = 128,
          .align_n = 256,

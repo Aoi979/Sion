@@ -4,9 +4,11 @@
 #include <cuda_runtime.h>
 #include <cstdint>
 
-#include "../detail/sm90_cluster.cuh"
+#include "../detail/sm90/cluster.cuh"
 
 namespace sm90_hgemm_pingpong {
+
+using namespace ::cuda_ops_core::detail::sm90::cluster;
 
 enum class RasterOrder { AlongM, AlongN };
 
@@ -47,8 +49,6 @@ __host__ __device__ constexpr uint32_t max_u32(uint32_t a, uint32_t b) {
 
 } // namespace detail
 
-// CUTLASS SM90 static persistent tile scheduler parameters, specialized for a
-// GEMM-only pingpong kernel.
 struct PersistentTileSchedulerSm90Params {
   uint32_t logical_tiles_m = 0;
   uint32_t logical_tiles_n = 0;
@@ -299,7 +299,8 @@ public:
   }
 
   __device__ GemmTile current() const {
-    dim3 cluster_cta = ::block_id_in_cluster();
+    dim3 cluster_cta =
+        ::cuda_ops_core::detail::sm90::cluster::block_id_in_cluster();
     return params_.tile_for_linear_idx(current_work_linear_idx_, cluster_cta.x,
                                        cluster_cta.y);
   }
@@ -325,7 +326,8 @@ public:
   __device__ GemmTile next_producer_tile() { return next(); }
 
   __device__ bool is_last_tile(uint32_t advance_count = 1) const {
-    dim3 cluster_cta = ::block_id_in_cluster();
+    dim3 cluster_cta =
+        ::cuda_ops_core::detail::sm90::cluster::block_id_in_cluster();
     return !params_
                 .tile_for_linear_idx(current_work_linear_idx_ +
                                          total_grid_size_ *
@@ -433,9 +435,6 @@ inline cudaError_t make_b_row_major_tensor_map(CUtensorMap *map,
     return cudaErrorInvalidValue;
   }
 
-  // Logical tensor is B(n0, k, n64), backed by row-major B[k][n].
-  // This matches CuTe's TMA gbasis for GMMA MN-major SW128:
-  // box (64 N values, 8 K values, 2 N chunks) == one 128x8 B atom.
   uint64_t shape[] = {static_cast<uint64_t>(kTmaBAtomN),
                       static_cast<uint64_t>(k),
                       static_cast<uint64_t>(n / kTmaBAtomN)};
@@ -472,8 +471,6 @@ __device__ __forceinline__ uint64_t make_smem_desc_k_major(Element *ptr) {
 __device__ __forceinline__ uint64_t make_smem_desc_mn_major_b(Element *ptr) {
   uint32_t addr = static_cast<uint32_t>(__cvta_generic_to_shared(ptr));
   uint64_t desc = matrix_descriptor_encode(addr);
-  // GMMA MN-major SW128 layout for a half B tile (N=128, K=64).
-  // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#asynchronous-warpgroup-level-leading-dimension-byte-offset
   desc |= matrix_descriptor_encode(1024) << 16;
   desc |= matrix_descriptor_encode(2048) << 32;
   desc |= 1ull << 62;
@@ -630,7 +627,8 @@ __device__ __forceinline__ void tma_load_b_mn_multicast(Element *dst,
 
 __device__ __forceinline__ uint16_t multicast_mask_b_cluster_m() {
   uint16_t mask = 0;
-  uint32_t cta_n = ::block_id_in_cluster().y;
+  uint32_t cta_n =
+      ::cuda_ops_core::detail::sm90::cluster::block_id_in_cluster().y;
 #pragma unroll
   for (uint32_t m = 0; m < kClusterM; ++m) {
     mask |= uint16_t{1u} << (m * kClusterN + cta_n);
@@ -663,7 +661,8 @@ __device__ __forceinline__ void arrive_barrier_remote(uint64_t *bar,
 }
 
 __device__ __forceinline__ void arrive_cluster_empty_barrier(uint64_t *bar) {
-  uint32_t rank = ::block_rank_in_cluster();
+  uint32_t rank =
+      ::cuda_ops_core::detail::sm90::cluster::block_rank_in_cluster();
   arrive_barrier(bar);
   arrive_barrier_remote(bar, rank ^ 1u);
 }
@@ -706,9 +705,6 @@ __device__ __forceinline__ int swizzle_128b_half_offset(uint32_t base_addr,
 __device__ __forceinline__ void store_accumulators_tma(
     SharedStorage &smem, void const *tensor_map_c, GemmTile tile,
     int warp_group_thread_idx, float acc[2][8][8]) {
-  // CUTLASS SM90_U32x4_STSM_N destination layout for one 64x128 GMMA
-  // accumulator tile.  Each stmatrix.x4 atom writes an 8-column strip; the
-  // second half-warp supplies the right 8 columns of each 16-column group.
   int const row = (warp_group_thread_idx & 0xf) +
                   (warp_group_thread_idx >> 5) * 16;
   int const col_lane = ((warp_group_thread_idx >> 4) & 0x1) * 8;
@@ -722,9 +718,6 @@ __device__ __forceinline__ void store_accumulators_tma(
       alignas(16) Element frag[8];
 #pragma unroll
       for (int i = 0; i < 8; ++i) {
-        // SM90_U32x4_STSM_N consumes the GMMA C fragment in the original
-        // register order. Its SrcLayout maps these eight values across the
-        // destination lane addresses, so a software reorder here would break C.
         frag[i] = __float2half_rn(acc[mma_m][inst_n][i]);
       }
 
@@ -878,7 +871,7 @@ __global__ __launch_bounds__(detail::kThreads) void hgemm_pingpong_kernel(
   }
   __syncthreads();
   fence_barrier_init();
-  ::cluster_sync();
+  ::cuda_ops_core::detail::sm90::cluster::cluster_sync();
 
   int const k_tiles = K / kBlockK;
   GemmPersistentTileScheduler scheduler(scheduler_params);
@@ -899,8 +892,10 @@ __global__ __launch_bounds__(detail::kThreads) void hgemm_pingpong_kernel(
     if (warp_group_thread_idx == 0) {
       int stage = 0;
       int phase = 0;
-      uint32_t const cluster_rank = ::block_rank_in_cluster();
-      uint32_t const cluster_m_rank = ::block_id_in_cluster().x;
+      uint32_t const cluster_rank =
+          ::cuda_ops_core::detail::sm90::cluster::block_rank_in_cluster();
+      uint32_t const cluster_m_rank =
+          ::cuda_ops_core::detail::sm90::cluster::block_id_in_cluster().x;
       uint16_t const b_multicast_mask = multicast_mask_b_cluster_m();
       constexpr uint32_t load_bytes_a =
           sizeof(Element) * kBlockM * kBlockK;
@@ -933,8 +928,6 @@ __global__ __launch_bounds__(detail::kThreads) void hgemm_pingpong_kernel(
                      tile.m * kBlockM);
           }
           if (has_valid_b_tile && b_multicast_mask != 0) {
-            // Each M-rank issues alternating 8-row K atoms. Every atom covers
-            // the full 128-wide N tile in canonical MN-major SW128 order.
 #pragma unroll
             for (int k_atom_iter = 0; k_atom_iter < kTmaBAtomsPerRank;
                  ++k_atom_iter) {

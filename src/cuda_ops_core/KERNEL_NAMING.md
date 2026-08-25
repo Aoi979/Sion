@@ -37,6 +37,10 @@ Rules:
 - `kernels/` contains `.cuh` files with CUDA kernel bodies. Default to one
   top-level `__global__` kernel per `.cuh`; the file stem should match the
   registry name without the launcher suffix.
+- Non-CUDA backend artifacts are kept under `kernels/non_cuda/<backend>/`.
+  These files are retained for reference or future porting only: they must not
+  be added to a CMake source list, public header set, launcher, registry, or
+  API until that backend is explicitly supported.
 - `detail/` contains reusable device helpers, traits, schedulers, barriers,
   swizzles, shared launch glue, and epilogue/mainloop building blocks. Files in
   `detail/` should not register kernels.

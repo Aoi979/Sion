@@ -9,8 +9,8 @@
 namespace cuda_ops_core {
 namespace {
 
-namespace splitk = detail::sm80_hgemm_128x256_splitk::n256_splitk;
-using SplitKShape = detail::sm80_hgemm_128x256_splitk::shape_mnk_n256;
+namespace splitk = detail::sm80::splitk;
+using SplitKShape = detail::sm80::tile::shape_mnk_n256;
 
 Status validate_splitk_request(uint32_t M, uint32_t N, uint32_t K,
                                     float alpha, float beta, half const *A,
@@ -150,11 +150,10 @@ REGISTER_KERNEL(
          .max_cc = 89,
          .priority = 85,
          .required_dynamic_smem_bytes =
-             cuda_ops_core::detail::sm80_hgemm_128x256_splitk::
-                 n256_splitk::kSplitKSharedStorageBytes128x256,
+             cuda_ops_core::detail::sm80::splitk::
+                 kSplitKSharedStorageBytes128x256,
          .required_threads_per_block =
-             cuda_ops_core::detail::sm80_hgemm_128x256_splitk::n256_splitk::
-                 kSplitKThreads},
+             cuda_ops_core::detail::sm80::splitk::kSplitKThreads},
         {.layout = cuda_ops_core::KernelLayout::NN,
          .align_m = 128,
          .align_n = 256,

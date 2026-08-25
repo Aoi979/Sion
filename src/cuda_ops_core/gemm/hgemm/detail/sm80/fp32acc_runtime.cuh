@@ -1,8 +1,11 @@
 #pragma once
 
-#include "../kernels/sm80_hgemm_f16_nn_m128n256k64_fp32acc.cuh"
+#include "../../kernels/sm80_hgemm_f16_nn_m128n256k64_fp32acc.cuh"
 
-namespace cuda_ops_core::detail::sm80_hgemm_128x256_fp32acc {
+namespace cuda_ops_core::detail::sm80::fp32acc {
+
+using namespace ::cuda_ops_core::detail::sm80::common;
+using namespace ::cuda_ops_core::detail::sm80::tile;
 
 constexpr int kStages = 3;
 constexpr int kDefaultBlockSwizzle = 8;
@@ -21,7 +24,7 @@ inline int select_block_swizzle(int M, int N, int K) {
 
 template <int BlockSwizzle>
 inline cudaError_t configure_hgemm_128x256x64_fp32acc() {
-  auto kernel_fptr = n256::sm80_hgemm_f16_nn_m128n256k64_fp32acc_kernel<
+  auto kernel_fptr = m128n256::sm80_hgemm_f16_nn_m128n256k64_fp32acc_kernel<
       shape_mnk_n256, kStages, BlockSwizzle>;
   cudaError_t err = cudaFuncSetAttribute(
       kernel_fptr, cudaFuncAttributeMaxDynamicSharedMemorySize,
@@ -64,7 +67,7 @@ inline void launch_hgemm_128x256x64_fp32acc_unchecked(
   dim3 block(kThreads);
   dim3 grid(tile_m_count * BlockSwizzle,
             (tile_n_count + BlockSwizzle - 1) / BlockSwizzle);
-  n256::sm80_hgemm_f16_nn_m128n256k64_fp32acc_kernel<
+  m128n256::sm80_hgemm_f16_nn_m128n256k64_fp32acc_kernel<
       shape_mnk_n256, kStages, BlockSwizzle>
       <<<grid, block, kSharedStorageBytes, stream>>>(A, B, C, M, N, K);
 }
@@ -118,4 +121,4 @@ inline cudaError_t launch_hgemm_128x256x64_fp32acc(
       A, B, C, M, N, K, kAutoBlockSwizzle, stream);
 }
 
-} // namespace cuda_ops_core::detail::sm80_hgemm_128x256_fp32acc
+} // namespace cuda_ops_core::detail::sm80::fp32acc

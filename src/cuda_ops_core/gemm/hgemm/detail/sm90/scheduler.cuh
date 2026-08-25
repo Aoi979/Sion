@@ -3,7 +3,8 @@
 #include <cuda_runtime.h>
 #include <cstdint>
 
-namespace detail {
+namespace cuda_ops_core::detail::sm90::scheduler {
+namespace impl {
 
 __host__ __device__ constexpr uint32_t ceil_div(uint32_t a, uint32_t b) {
   return b == 0 ? 0 : (a + b - 1) / b;
@@ -28,7 +29,7 @@ __host__ __device__ constexpr uint32_t max_u32(uint32_t a, uint32_t b) {
   return a > b ? a : b;
 }
 
-} // namespace detail
+} // namespace impl
 
 enum class RasterOrder { AlongM, AlongN };
 
@@ -125,7 +126,7 @@ struct PersistentTileSchedulerSm90Params {
                                                             uint32_t cluster_m,
                                                             uint32_t cluster_n,
                                                             int sm_count) {
-    uint32_t cluster_size = detail::max_u32(cluster_m * cluster_n, 1u);
+    uint32_t cluster_size = impl::max_u32(cluster_m * cluster_n, 1u);
     if (sm_count <= 0 || max_sm_per_gpc <= 0) {
       return 0;
     }
@@ -164,8 +165,8 @@ struct PersistentTileSchedulerSm90Params {
       RasterOrderOptions raster_order_option = RasterOrderOptions::Heuristic) {
     uint32_t problem_blocks_m = ctas_m;
     uint32_t problem_blocks_n = ctas_n;
-    uint32_t cluster_shape_m = detail::max_u32(cluster_m, 1u);
-    uint32_t cluster_shape_n = detail::max_u32(cluster_n, 1u);
+    uint32_t cluster_shape_m = impl::max_u32(cluster_m, 1u);
+    uint32_t cluster_shape_n = impl::max_u32(cluster_n, 1u);
 
     RasterOrder raster_order = get_rasterization_order(
         problem_blocks_m, problem_blocks_n, raster_order_option);
@@ -259,7 +260,7 @@ struct PersistentTileSchedulerSm90Params {
         along_n ? params.cluster_shape_minor : params.cluster_shape_major;
     uint32_t cluster_n =
         along_n ? params.cluster_shape_major : params.cluster_shape_minor;
-    uint32_t cluster_size = detail::max_u32(cluster_m * cluster_n, 1u);
+    uint32_t cluster_size = impl::max_u32(cluster_m * cluster_n, 1u);
     int problem_blocks_total = static_cast<int>(params.blocks_per_problem);
 
     dim3 launch_grid = along_n ? dim3(cluster_m, 1, 1) : dim3(1, cluster_n, 1);
@@ -267,11 +268,11 @@ struct PersistentTileSchedulerSm90Params {
     if (cluster_size == 1) {
       if (along_n) {
         launch_grid.y = truncate_by_problem_size
-                            ? detail::min_int(sm_count, problem_blocks_total)
+                            ? impl::min_int(sm_count, problem_blocks_total)
                             : sm_count;
       } else {
         launch_grid.x = truncate_by_problem_size
-                            ? detail::min_int(sm_count, problem_blocks_total)
+                            ? impl::min_int(sm_count, problem_blocks_total)
                             : sm_count;
       }
     } else if (max_active_clusters != 0 &&
@@ -281,13 +282,13 @@ struct PersistentTileSchedulerSm90Params {
         int active_ctas = max_active_clusters * static_cast<int>(cluster_n);
         int problem_ctas = problem_blocks_total / static_cast<int>(cluster_m);
         launch_grid.y = truncate_by_problem_size
-                            ? detail::min_int(active_ctas, problem_ctas)
+                            ? impl::min_int(active_ctas, problem_ctas)
                             : active_ctas;
       } else {
         int active_ctas = max_active_clusters * static_cast<int>(cluster_m);
         int problem_ctas = problem_blocks_total / static_cast<int>(cluster_n);
         launch_grid.x = truncate_by_problem_size
-                            ? detail::min_int(active_ctas, problem_ctas)
+                            ? impl::min_int(active_ctas, problem_ctas)
                             : active_ctas;
       }
     } else {
@@ -298,13 +299,13 @@ struct PersistentTileSchedulerSm90Params {
         int active_ctas = static_cast<int>(cta_per_device / cluster_m);
         int problem_ctas = problem_blocks_total / static_cast<int>(cluster_m);
         launch_grid.y = truncate_by_problem_size
-                            ? detail::min_int(active_ctas, problem_ctas)
+                            ? impl::min_int(active_ctas, problem_ctas)
                             : active_ctas;
       } else {
         int active_ctas = static_cast<int>(cta_per_device / cluster_n);
         int problem_ctas = problem_blocks_total / static_cast<int>(cluster_n);
         launch_grid.x = truncate_by_problem_size
-                            ? detail::min_int(active_ctas, problem_ctas)
+                            ? impl::min_int(active_ctas, problem_ctas)
                             : active_ctas;
       }
     }
@@ -368,3 +369,5 @@ private:
   uint64_t current_work_linear_idx_ = 0;
   uint64_t total_grid_size_ = 1;
 };
+
+} // namespace cuda_ops_core::detail::sm90::scheduler

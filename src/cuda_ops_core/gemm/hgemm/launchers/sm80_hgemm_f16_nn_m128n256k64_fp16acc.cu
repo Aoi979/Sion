@@ -1,17 +1,18 @@
-#include "../detail/sm80_hgemm_f16_nn_accum_launcher.cuh"
+#include "../detail/sm80/launcher.cuh"
 
 namespace cuda_ops_core {
 
 Status sm80_hgemm_f16_nn_m128n256k64_fp16acc_launch(
     uint32_t M, uint32_t N, uint32_t K, float alpha, half const *A,
     half const *B, float beta, half *C, cudaStream_t stream) {
-  auto status = detail::validate_sm80_hgemm_f16_nn_accum<shape_mnk_n256>(
+  auto status = detail::sm80::launcher::validate_sm80_hgemm_f16_nn_accum<
+      detail::sm80::tile::shape_mnk_n256>(
       M, N, K, alpha, beta, A, B, C, "m128n256k64_fp16acc");
   if (!status.ok()) {
     return status;
   }
-  return detail::convert_sm80_hgemm_status(
-      sm80_hgemm::launch_hgemm_128x256x64_fp16acc(
+  return detail::sm80::launcher::convert_sm80_hgemm_status(
+      detail::sm80::runtime::launch_hgemm_128x256x64_fp16acc(
           const_cast<half *>(A), const_cast<half *>(B), C, static_cast<int>(M),
           static_cast<int>(N), static_cast<int>(K), stream));
 }
@@ -26,6 +27,9 @@ REGISTER_KERNEL(
         {.min_cc = 80,
          .max_cc = 89,
          .priority = 70,
-         .required_dynamic_smem_bytes = sm80_hgemm::kSharedStorageBytesN256,
-         .required_threads_per_block = sm80_hgemm::kThreadsN256},
-        cuda_ops_core::detail::sm80_hgemm_f16_nn_accum_metadata<shape_mnk_n256>()));
+         .required_dynamic_smem_bytes =
+             cuda_ops_core::detail::sm80::runtime::kSharedStorageBytesN256,
+         .required_threads_per_block =
+             cuda_ops_core::detail::sm80::runtime::kThreadsN256},
+        cuda_ops_core::detail::sm80::launcher::sm80_hgemm_f16_nn_accum_metadata<
+            cuda_ops_core::detail::sm80::tile::shape_mnk_n256>()));

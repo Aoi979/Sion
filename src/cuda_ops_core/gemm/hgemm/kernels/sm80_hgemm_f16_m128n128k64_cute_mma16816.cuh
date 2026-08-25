@@ -58,9 +58,6 @@ __global__ static __launch_bounds__(decltype(size(
   CUTE_STATIC_ASSERT_V(
       congruent(select<0, 1>(shape_MNK), dC)); // dC strides for shape MN
 
-  //
-  // Full and Tiled Tensors
-  //
 
   // Represent the full tensors
   Tensor mA =
@@ -70,9 +67,6 @@ __global__ static __launch_bounds__(decltype(size(
   Tensor mC =
       make_tensor(make_gmem_ptr(C), select<0, 1>(shape_MNK), dC); // (M,N)
 
-  // Block swizzle: reorder CTA execution for better L2 cache locality.
-  // Positive kBlockSwizzle = row-major swizzle (reuse A rows).
-  // Negative kBlockSwizzle = column-major swizzle (reuse B cols).
   int const tile_m_max = size(ceil_div(get<0>(shape_MNK), size<0>(cta_tiler)));
   int const tile_n_max = size(ceil_div(get<1>(shape_MNK), size<1>(cta_tiler)));
   int tile_m, tile_n;
@@ -109,9 +103,6 @@ __global__ static __launch_bounds__(decltype(size(
   Tensor sB = make_tensor(make_smem_ptr(smem.B.begin()),
                           sB_layout); // (BLK_N,BLK_K,PIPE)
 
-  //
-  // Partition the copying of A and B tiles across the threads
-  //
 
   ThrCopy thr_copy_a = copy_a.get_slice(threadIdx.x);
   Tensor tAgA = thr_copy_a.partition_S(gA); // (CPY,CPY_M,CPY_K,k)
@@ -126,9 +117,6 @@ __global__ static __launch_bounds__(decltype(size(
   CUTE_STATIC_ASSERT_V(size<1>(tBgB) == size<1>(tBsB)); // CPY_N
   CUTE_STATIC_ASSERT_V(size<2>(tBgB) == size<2>(tBsB)); // CPY_K
 
-  //
-  // PREFETCH
-  //
 
   auto K_PIPE_MAX = size<3>(tAsA);
 
@@ -169,9 +157,6 @@ __global__ static __launch_bounds__(decltype(size(
   // Clear the accumulators
   clear(tCrC);
 
-  //
-  // Copy Atom retiling
-  //
 
   TiledCopy s2r_copy_a = make_tiled_copy_A(s2r_atom_a, mma);
   ThrCopy s2r_thr_copy_a = s2r_copy_a.get_slice(threadIdx.x);
@@ -226,10 +211,6 @@ __global__ static __launch_bounds__(decltype(size(
       copy(s2r_atom_a, tXsA_p(_, _, k_block_next), tXrA(_, _, k_block_next));
       copy(s2r_atom_b, tXsB_p(_, _, k_block_next), tXrB(_, _, k_block_next));
 
-      // Spread cp.async across k-blocks to lower ldgsts density.
-      // A and B are issued in separate k-blocks; fence + pipe advance
-      // are unconditional so the pipeline drains correctly even after
-      // the last real tile has been issued.
       if (k_block == 0) {
         if (k_tiles_to_issue > 0) {
           copy(copy_a, tAgA(_, _, _, k_tile_next),
@@ -258,9 +239,6 @@ __global__ static __launch_bounds__(decltype(size(
     --k_tiles_to_compute;
   }
 
-  //
-  // Epilogue
-  //
 
   cp_async_wait<0>();
   __syncthreads();
@@ -268,8 +246,6 @@ __global__ static __launch_bounds__(decltype(size(
   (void)alpha;
   (void)beta;
 
-  // Reuse the mainloop A smem buffer: it is large enough for the 128x128
-  // half output tile and the mainloop no longer needs it.
   Tensor sC = make_tensor(make_smem_ptr(reinterpret_cast<TC *>(smem.A.begin())),
                           sC_layout); // (BLK_M,BLK_N)
 

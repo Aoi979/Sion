@@ -4,6 +4,7 @@
 #include <cuda_runtime.h>
 #include <cstdint>
 
+namespace cuda_ops_core::detail::sm90::barrier {
 __device__ __forceinline__ void init_barrier(uint64_t *bar, int arrive_count) {
   uint32_t bar_ptr = static_cast<uint32_t>(__cvta_generic_to_shared(bar));
   asm volatile("mbarrier.init.shared::cta.b64 [%0], %1;\n" ::"r"(bar_ptr),
@@ -57,3 +58,6 @@ __device__ __forceinline__ void arrive_barrier_remote(uint64_t *bar,
                "r"(dst_cta_rank)
                : "memory");
 }
+
+} // namespace cuda_ops_core::detail::sm90::barrier
+
