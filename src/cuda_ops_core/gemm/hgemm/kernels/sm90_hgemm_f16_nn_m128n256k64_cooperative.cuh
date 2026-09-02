@@ -4,8 +4,8 @@
 #include <cuda_fp16.h>
 #include <cuda_runtime.h>
 
-#include "../detail/sm90/cluster.cuh"
 #include "../detail/sm90/barrier.cuh"
+#include "../detail/sm90/cluster.cuh"
 #include "../detail/sm90/scheduler.cuh"
 
 using namespace ::cuda_ops_core::detail::sm90::barrier;

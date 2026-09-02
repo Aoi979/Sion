@@ -23,30 +23,43 @@ __device__ __forceinline__ int xcore1000_hgemm_swizzled_k(int logical_row,
                                           tCrC[(M)][(N)]);                     \
   } while (0)
 
-#define XCORE1000_HGEMM_LDG_A(K_OFFSET, STAGE)                                 \
+#define XCORE1000_HGEMM_LDG_A(K_TILE, STAGE)                                   \
   do {                                                                         \
+    int const gmem_k_offset = (K_TILE) * kCtaK;                                \
+    int const row = ldg_m_base + (STAGE) * kMmaAtomM;                          \
     mxc::ldg_b128_bsm<0, mxc::helper::all_lanes_mask, true, true, false,       \
-                      true>(ldg_sA_addr[(STAGE)],                               \
-                            ldg_gA_addr[(STAGE)] + (K_OFFSET));                 \
+                      true>(sA + row * kCtaK + ldg_smem_k_offset,              \
+                            gA + row * gmem_a_stride + gmem_k_offset +         \
+                                ldg_gmem_k_offset);                            \
   } while (0)
 
-#define XCORE1000_HGEMM_LDG_B(K_OFFSET, STAGE)                                 \
+#define XCORE1000_HGEMM_LDG_B(K_TILE, STAGE)                                   \
   do {                                                                         \
+    int const gmem_k_offset = (K_TILE) * kCtaK;                                \
+    int const row = ldg_n_base + (STAGE) * (2 * kMmaAtomN);                    \
     mxc::ldg_b128_bsm<0, mxc::helper::all_lanes_mask, true, true, false,       \
-                      true>(ldg_sB_addr[(STAGE)],                               \
-                            ldg_gB_addr[(STAGE)] + (K_OFFSET));                 \
+                      true>(sB + row * kCtaK + ldg_smem_k_offset,              \
+                            gB + row * gmem_b_stride + gmem_k_offset +         \
+                                ldg_gmem_k_offset);                            \
   } while (0)
 
 #define XCORE1000_HGEMM_LDS_A_FRAGMENT(STAGE, K_GROUP)                         \
   do {                                                                         \
     *reinterpret_cast<v4f32 *>(&tCrA[(STAGE)][(K_GROUP)]) =                    \
-        *lds_a_addr[(STAGE)][(K_GROUP)];                                       \
+        *reinterpret_cast<v4f32 *>(                                            \
+            sA + (lds_m_base + (STAGE) * kMmaAtomM) * kCtaK +                  \
+            ((K_GROUP) == 0 ? lds_smem_k0 : lds_smem_k1));                     \
   } while (0)
 
 #define XCORE1000_HGEMM_LDS_B_FRAGMENT(STAGE, N_IN_STAGE, K_GROUP)             \
   do {                                                                         \
     *reinterpret_cast<v4f32 *>(&tCrB[2 * (STAGE) + (N_IN_STAGE)][(K_GROUP)]) = \
-        *lds_b_addr[(STAGE)][(N_IN_STAGE)][(K_GROUP)];                         \
+        *reinterpret_cast<v4f32 *>(                                            \
+            sB +                                                               \
+            (((N_IN_STAGE) == 0 ? lds_n0_base : lds_n1_base) +                 \
+             (STAGE) * 2 * kMmaAtomN) *                                        \
+                kCtaK +                                                        \
+            ((K_GROUP) == 0 ? lds_smem_k0 : lds_smem_k1));                     \
   } while (0)
 
 __global__ void hgemm_tn_256x256x64_4stage_fp16(const void *A, const void *B,
@@ -95,8 +108,10 @@ __global__ void hgemm_tn_256x256x64_4stage_fp16(const void *A, const void *B,
 
   int const gmem_a_stride = K;
   int const gmem_b_stride = K;
-  half *gA = reinterpret_cast<half *>(const_cast<void *>(A));
-  half *gB = reinterpret_cast<half *>(const_cast<void *>(B));
+  half *gA = reinterpret_cast<half *>(const_cast<void *>(A)) +
+             tile_m * kCtaM * gmem_a_stride;
+  half *gB = reinterpret_cast<half *>(const_cast<void *>(B)) +
+             tile_n * kCtaN * gmem_b_stride;
 
   v4f16 tCrA[kMmaInstructionM][2][2];
   v4f16 tCrB[kMmaInstructionN][2][2];
@@ -114,15 +129,6 @@ __global__ void hgemm_tn_256x256x64_4stage_fp16(const void *A, const void *B,
   int const ldg_n_group = ldg_n_row / (2 * kMmaAtomN);
   int const ldg_n_base = ldg_n_group * kWaveTileN + ldg_n_row % (2 * kMmaAtomN);
 
-  int const ldg_sA_base_offset =
-      ldg_m_base * kCtaK + ldg_smem_k_offset;
-  int const ldg_sB_base_offset =
-      ldg_n_base * kCtaK + ldg_smem_k_offset;
-  int const ldg_gA_base_offset =
-      (tile_m * kCtaM + ldg_m_base) * gmem_a_stride + ldg_gmem_k_offset;
-  int const ldg_gB_base_offset =
-      (tile_n * kCtaN + ldg_n_base) * gmem_b_stride + ldg_gmem_k_offset;
-
   int const mma_mn = tid % kMmaAtomM;
   int const lds_logical_k0 = (lane_id / kMmaAtomM) * kLdgVectorSize;
   int const lds_smem_k0 = xcore1000_hgemm_swizzled_k(mma_mn, lds_logical_k0);
@@ -130,85 +136,7 @@ __global__ void hgemm_tn_256x256x64_4stage_fp16(const void *A, const void *B,
       xcore1000_hgemm_swizzled_k(mma_mn, lds_logical_k0 + 32);
   int const lds_m_base = wave_id_m * kWaveTileM + mma_mn;
   int const lds_n0_base = wave_id_n * kWaveTileN + mma_mn;
-  int const lds_a_k0_base_offset = lds_m_base * kCtaK + lds_smem_k0;
-  int const lds_a_k1_base_offset = lds_m_base * kCtaK + lds_smem_k1;
-  int const lds_b_k0_base_offset = lds_n0_base * kCtaK + lds_smem_k0;
-  int const lds_b_k1_base_offset = lds_n0_base * kCtaK + lds_smem_k1;
-
-
-  half *const ldg_sA_addr[kStage] = {
-      sA + ldg_sA_base_offset,
-      sA + ldg_sA_base_offset + kMmaAtomM * kCtaK,
-      sA + ldg_sA_base_offset + 2 * kMmaAtomM * kCtaK,
-      sA + ldg_sA_base_offset + 3 * kMmaAtomM * kCtaK,
-  };
-  half *const ldg_sB_addr[kStage] = {
-      sB + ldg_sB_base_offset,
-      sB + ldg_sB_base_offset + 2 * kMmaAtomN * kCtaK,
-      sB + ldg_sB_base_offset + 4 * kMmaAtomN * kCtaK,
-      sB + ldg_sB_base_offset + 6 * kMmaAtomN * kCtaK,
-  };
-  half *const ldg_gA_addr[kStage] = {
-      gA + ldg_gA_base_offset,
-      gA + ldg_gA_base_offset + kMmaAtomM * gmem_a_stride,
-      gA + ldg_gA_base_offset + 2 * kMmaAtomM * gmem_a_stride,
-      gA + ldg_gA_base_offset + 3 * kMmaAtomM * gmem_a_stride,
-  };
-  half *const ldg_gB_addr[kStage] = {
-      gB + ldg_gB_base_offset,
-      gB + ldg_gB_base_offset + 2 * kMmaAtomN * gmem_b_stride,
-      gB + ldg_gB_base_offset + 4 * kMmaAtomN * gmem_b_stride,
-      gB + ldg_gB_base_offset + 6 * kMmaAtomN * gmem_b_stride,
-  };
-
-  v4f32 *const lds_a_addr[kStage][2] = {
-      {reinterpret_cast<v4f32 *>(sA + lds_a_k0_base_offset),
-       reinterpret_cast<v4f32 *>(sA + lds_a_k1_base_offset)},
-      {reinterpret_cast<v4f32 *>(sA + lds_a_k0_base_offset +
-                                 kMmaAtomM * kCtaK),
-       reinterpret_cast<v4f32 *>(sA + lds_a_k1_base_offset +
-                                 kMmaAtomM * kCtaK)},
-      {reinterpret_cast<v4f32 *>(sA + lds_a_k0_base_offset +
-                                 2 * kMmaAtomM * kCtaK),
-       reinterpret_cast<v4f32 *>(sA + lds_a_k1_base_offset +
-                                 2 * kMmaAtomM * kCtaK)},
-      {reinterpret_cast<v4f32 *>(sA + lds_a_k0_base_offset +
-                                 3 * kMmaAtomM * kCtaK),
-       reinterpret_cast<v4f32 *>(sA + lds_a_k1_base_offset +
-                                 3 * kMmaAtomM * kCtaK)},
-  };
-  v4f32 *const lds_b_addr[kStage][2][2] = {
-      {{reinterpret_cast<v4f32 *>(sB + lds_b_k0_base_offset),
-        reinterpret_cast<v4f32 *>(sB + lds_b_k1_base_offset)},
-       {reinterpret_cast<v4f32 *>(sB + lds_b_k0_base_offset +
-                                  kMmaAtomN * kCtaK),
-        reinterpret_cast<v4f32 *>(sB + lds_b_k1_base_offset +
-                                  kMmaAtomN * kCtaK)}},
-      {{reinterpret_cast<v4f32 *>(sB + lds_b_k0_base_offset +
-                                  2 * kMmaAtomN * kCtaK),
-        reinterpret_cast<v4f32 *>(sB + lds_b_k1_base_offset +
-                                  2 * kMmaAtomN * kCtaK)},
-       {reinterpret_cast<v4f32 *>(sB + lds_b_k0_base_offset +
-                                  3 * kMmaAtomN * kCtaK),
-        reinterpret_cast<v4f32 *>(sB + lds_b_k1_base_offset +
-                                  3 * kMmaAtomN * kCtaK)}},
-      {{reinterpret_cast<v4f32 *>(sB + lds_b_k0_base_offset +
-                                  4 * kMmaAtomN * kCtaK),
-        reinterpret_cast<v4f32 *>(sB + lds_b_k1_base_offset +
-                                  4 * kMmaAtomN * kCtaK)},
-       {reinterpret_cast<v4f32 *>(sB + lds_b_k0_base_offset +
-                                  5 * kMmaAtomN * kCtaK),
-        reinterpret_cast<v4f32 *>(sB + lds_b_k1_base_offset +
-                                  5 * kMmaAtomN * kCtaK)}},
-      {{reinterpret_cast<v4f32 *>(sB + lds_b_k0_base_offset +
-                                  6 * kMmaAtomN * kCtaK),
-        reinterpret_cast<v4f32 *>(sB + lds_b_k1_base_offset +
-                                  6 * kMmaAtomN * kCtaK)},
-       {reinterpret_cast<v4f32 *>(sB + lds_b_k0_base_offset +
-                                  7 * kMmaAtomN * kCtaK),
-        reinterpret_cast<v4f32 *>(sB + lds_b_k1_base_offset +
-                                  7 * kMmaAtomN * kCtaK)}},
-  };
+  int const lds_n1_base = lds_n0_base + kMmaAtomN;
 
   XCORE1000_HGEMM_LDG_A(0, 0);
   XCORE1000_HGEMM_LDG_B(0, 0);
@@ -242,12 +170,11 @@ __global__ void hgemm_tn_256x256x64_4stage_fp16(const void *A, const void *B,
   // Stable-state invariant at loop entry:
   //   - current stage0/1 are in registers;
   //   - current stage2/3 are the four outstanding gmem->smem requests.
-  int next_k_offset = kCtaK;
-  for (int k_tiles_left = k_tile_num - 1; k_tiles_left > 0;
-       --k_tiles_left, next_k_offset += kCtaK) {
+  for (int k_tile = 0; k_tile < k_tile_num - 1; ++k_tile) {
+    int const next_tile = k_tile + 1;
 
     XCORE1000_HGEMM_MMA(0, 0, 0, 0);
-    XCORE1000_HGEMM_LDG_A(next_k_offset, 0);
+    XCORE1000_HGEMM_LDG_A(next_tile, 0);
     XCORE1000_HGEMM_MMA(0, 0, 0, 1);
     XCORE1000_HGEMM_MMA(0, 0, 1, 0);
     XCORE1000_HGEMM_MMA(0, 0, 1, 1);
@@ -268,7 +195,7 @@ __global__ void hgemm_tn_256x256x64_4stage_fp16(const void *A, const void *B,
     XCORE1000_HGEMM_MMA(1, 1, 1, 1);
     XCORE1000_HGEMM_LDS_A_FRAGMENT(2, 0);
     XCORE1000_HGEMM_MMA(0, 2, 0, 0);
-    XCORE1000_HGEMM_LDG_B(next_k_offset, 0);
+    XCORE1000_HGEMM_LDG_B(next_tile, 0);
     XCORE1000_HGEMM_MMA(0, 2, 0, 1);
     XCORE1000_HGEMM_LDS_A_FRAGMENT(2, 1);
     XCORE1000_HGEMM_MMA(0, 2, 1, 0);
@@ -292,7 +219,7 @@ __global__ void hgemm_tn_256x256x64_4stage_fp16(const void *A, const void *B,
     XCORE1000_HGEMM_MMA(1, 3, 1, 1);
 
     XCORE1000_HGEMM_MMA(2, 0, 0, 0);
-    XCORE1000_HGEMM_LDG_A(next_k_offset, 1);
+    XCORE1000_HGEMM_LDG_A(next_tile, 1);
     XCORE1000_HGEMM_MMA(2, 0, 0, 1);
     XCORE1000_HGEMM_MMA(2, 0, 1, 0);
     XCORE1000_HGEMM_MMA(2, 0, 1, 1);
@@ -313,7 +240,7 @@ __global__ void hgemm_tn_256x256x64_4stage_fp16(const void *A, const void *B,
     XCORE1000_HGEMM_MMA(0, 4, 1, 1);
     XCORE1000_HGEMM_LDS_A_FRAGMENT(3, 0);
     XCORE1000_HGEMM_MMA(2, 5, 0, 0);
-    XCORE1000_HGEMM_LDG_B(next_k_offset, 1);
+    XCORE1000_HGEMM_LDG_B(next_tile, 1);
     XCORE1000_HGEMM_MMA(2, 5, 0, 1);
     XCORE1000_HGEMM_LDS_A_FRAGMENT(3, 1);
     XCORE1000_HGEMM_MMA(2, 5, 1, 0);
@@ -337,7 +264,7 @@ __global__ void hgemm_tn_256x256x64_4stage_fp16(const void *A, const void *B,
     XCORE1000_HGEMM_MMA(1, 5, 1, 1);
 
     XCORE1000_HGEMM_MMA(0, 6, 0, 0);
-    XCORE1000_HGEMM_LDG_A(next_k_offset, 2);
+    XCORE1000_HGEMM_LDG_A(next_tile, 2);
     XCORE1000_HGEMM_MMA(0, 6, 0, 1);
     XCORE1000_HGEMM_MMA(0, 6, 1, 0);
     XCORE1000_HGEMM_MMA(0, 6, 1, 1);
@@ -359,7 +286,7 @@ __global__ void hgemm_tn_256x256x64_4stage_fp16(const void *A, const void *B,
     XCORE1000_HGEMM_LDS_A_FRAGMENT(0, 0);
 
     XCORE1000_HGEMM_MMA(3, 4, 0, 0);
-    XCORE1000_HGEMM_LDG_B(next_k_offset, 2);
+    XCORE1000_HGEMM_LDG_B(next_tile, 2);
     XCORE1000_HGEMM_MMA(3, 4, 0, 1);
     XCORE1000_HGEMM_LDS_A_FRAGMENT(0, 1);
     XCORE1000_HGEMM_MMA(3, 4, 1, 0);
@@ -382,7 +309,7 @@ __global__ void hgemm_tn_256x256x64_4stage_fp16(const void *A, const void *B,
     XCORE1000_HGEMM_MMA(1, 7, 1, 1);
 
     XCORE1000_HGEMM_MMA(2, 2, 0, 0);
-    XCORE1000_HGEMM_LDG_A(next_k_offset, 3);
+    XCORE1000_HGEMM_LDG_A(next_tile, 3);
     XCORE1000_HGEMM_MMA(2, 2, 0, 1);
     XCORE1000_HGEMM_MMA(2, 2, 1, 0);
     XCORE1000_HGEMM_MMA(2, 2, 1, 1);
@@ -403,7 +330,7 @@ __global__ void hgemm_tn_256x256x64_4stage_fp16(const void *A, const void *B,
     XCORE1000_HGEMM_MMA(3, 3, 1, 1);
     XCORE1000_HGEMM_LDS_A_FRAGMENT(1, 0);
     XCORE1000_HGEMM_MMA(2, 6, 0, 0);
-    XCORE1000_HGEMM_LDG_B(next_k_offset, 3);
+    XCORE1000_HGEMM_LDG_B(next_tile, 3);
     XCORE1000_HGEMM_MMA(2, 6, 0, 1);
     XCORE1000_HGEMM_LDS_A_FRAGMENT(1, 1);
     XCORE1000_HGEMM_MMA(2, 6, 1, 0);

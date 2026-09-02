@@ -28,6 +28,10 @@ __pycache__/
 /hgemm_tc_report.md
 /benchmarks/results/*
 !/benchmarks/results/.gitkeep
+/benchmarks/manual_backups/
+/benchmarks/reports/
+/benchmarks/standalone/
+/profiles/
 
 # External kernel drop-in directories copied into src/cuda_ops_core.
 /my_kernel_sm80/
