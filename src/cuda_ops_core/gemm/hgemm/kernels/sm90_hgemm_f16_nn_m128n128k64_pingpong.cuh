@@ -4,369 +4,79 @@
 #include <cuda_runtime.h>
 #include <cstdint>
 
+#include "../detail/sm90/barrier.cuh"
 #include "../detail/sm90/cluster.cuh"
+#include "../detail/sm90/pipeline.cuh"
+#include "../detail/sm90/shared_memory.cuh"
+#include "../detail/sm90/wgmma.cuh"
+#include "../detail/sm90/pingpong_tile_scheduler.cuh"
+#include "../detail/sm90/tma.cuh"
 
 namespace sm90_hgemm_pingpong {
 
+using namespace ::cuda_ops_core::detail::sm90::barrier;
 using namespace ::cuda_ops_core::detail::sm90::cluster;
-
-enum class RasterOrder { AlongM, AlongN };
-
-enum class RasterOrderOptions { Heuristic, AlongM, AlongN };
-
-struct GemmTile {
-  int m = -1;
-  int n = -1;
-  int batch = -1;
-  bool valid = false;     // Still inside the persistent scheduler stream.
-  bool in_bounds = false; // Inside the original, unpadded M/N tile space.
-};
-
-namespace detail {
-
-__host__ __device__ constexpr uint32_t ceil_div(uint32_t a, uint32_t b) {
-  return b == 0 ? 0 : (a + b - 1) / b;
-}
-
-__host__ __device__ constexpr uint32_t ceil_div_pos(int a, int b) {
-  return (a <= 0 || b <= 0)
-             ? 0u
-             : ceil_div(static_cast<uint32_t>(a), static_cast<uint32_t>(b));
-}
-
-__host__ __device__ constexpr uint32_t round_up(uint32_t value,
-                                                uint32_t multiple) {
-  return multiple == 0 ? value : ceil_div(value, multiple) * multiple;
-}
-
-__host__ __device__ constexpr int min_int(int a, int b) {
-  return a < b ? a : b;
-}
-
-__host__ __device__ constexpr uint32_t max_u32(uint32_t a, uint32_t b) {
-  return a > b ? a : b;
-}
-
-} // namespace detail
-
-struct PersistentTileSchedulerSm90Params {
-  uint32_t logical_tiles_m = 0;
-  uint32_t logical_tiles_n = 0;
-  uint32_t problem_blocks_m = 0;
-  uint32_t problem_blocks_n = 0;
-  uint32_t problem_blocks_l = 1;
-  uint32_t cluster_shape_m = 1;
-  uint32_t cluster_shape_n = 1;
-
-  uint64_t blocks_per_batch = 0;
-  uint64_t blocks_per_problem = 0;
-
-  int32_t log_swizzle_size = 0;
-  RasterOrder raster_order = RasterOrder::AlongN;
-
-  __host__ __device__ static int32_t
-  get_log_swizzle_size(uint32_t problem_ctas_m, uint32_t problem_ctas_n,
-                       int max_swizzle_size) {
-    uint32_t min_cta_dim =
-        problem_ctas_m < problem_ctas_n ? problem_ctas_m : problem_ctas_n;
-    if (max_swizzle_size >= 8 && min_cta_dim >= 6) {
-      return 3;
-    }
-    if (max_swizzle_size >= 4 && min_cta_dim >= 3) {
-      return 2;
-    }
-    if (max_swizzle_size >= 2 && min_cta_dim >= 2) {
-      return 1;
-    }
-    return 0;
-  }
-
-  __host__ __device__ static RasterOrder
-  get_rasterization_order(uint32_t tiles_m, uint32_t tiles_n,
-                          RasterOrderOptions option) {
-    if (option == RasterOrderOptions::Heuristic) {
-      return tiles_n > tiles_m ? RasterOrder::AlongM : RasterOrder::AlongN;
-    }
-    return option == RasterOrderOptions::AlongN ? RasterOrder::AlongN
-                                                : RasterOrder::AlongM;
-  }
-
-  __host__ __device__ static uint32_t get_max_cta_occupancy(int max_sm_per_gpc,
-                                                            uint32_t cluster_m,
-                                                            uint32_t cluster_n,
-                                                            int sm_count) {
-    uint32_t cluster_size = detail::max_u32(cluster_m * cluster_n, 1u);
-    if (sm_count <= 0 || max_sm_per_gpc <= 0) {
-      return 0;
-    }
-
-    int min_num_gpc = sm_count < max_sm_per_gpc ? 1 : sm_count / max_sm_per_gpc;
-    int max_cta_per_gpc =
-        max_sm_per_gpc - (max_sm_per_gpc % static_cast<int>(cluster_size));
-    int cta_per_device = min_num_gpc * max_cta_per_gpc;
-
-    int residual_gpc =
-        sm_count < max_sm_per_gpc ? 0 : sm_count % max_sm_per_gpc;
-    int residual_cta =
-        residual_gpc - (residual_gpc % static_cast<int>(cluster_size));
-    cta_per_device += residual_cta;
-    cta_per_device = sm_count < cta_per_device ? sm_count : cta_per_device;
-
-    return static_cast<uint32_t>(cta_per_device);
-  }
-
-  __host__ __device__ void initialize(
-      int M, int N, int cta_m, int cta_n, int batch_count = 1,
-      uint32_t cluster_m = 1, uint32_t cluster_n = 1, int max_swizzle_size = 1,
-      RasterOrderOptions raster_order_option = RasterOrderOptions::Heuristic) {
-    uint32_t ctas_m = detail::ceil_div_pos(M, cta_m);
-    uint32_t ctas_n = detail::ceil_div_pos(N, cta_n);
-    uint32_t batches =
-        batch_count <= 0 ? 1u : static_cast<uint32_t>(batch_count);
-    initialize_from_tile_counts(ctas_m, ctas_n, batches, cluster_m, cluster_n,
-                                max_swizzle_size, raster_order_option);
-  }
-
-  __host__ __device__ void initialize_from_tile_counts(
-      uint32_t ctas_m, uint32_t ctas_n, uint32_t batches = 1,
-      uint32_t cluster_m = 1, uint32_t cluster_n = 1, int max_swizzle_size = 1,
-      RasterOrderOptions raster_order_option = RasterOrderOptions::Heuristic) {
-    logical_tiles_m = ctas_m;
-    logical_tiles_n = ctas_n;
-    problem_blocks_l = batches == 0 ? 1u : batches;
-    cluster_shape_m = detail::max_u32(cluster_m, 1u);
-    cluster_shape_n = detail::max_u32(cluster_n, 1u);
-
-    log_swizzle_size = get_log_swizzle_size(ctas_m, ctas_n, max_swizzle_size);
-    uint32_t swizzle = 1u << log_swizzle_size;
-
-    problem_blocks_m = detail::round_up(ctas_m, swizzle * cluster_shape_m);
-    problem_blocks_n = detail::round_up(ctas_n, swizzle * cluster_shape_n);
-    raster_order = get_rasterization_order(problem_blocks_m, problem_blocks_n,
-                                           raster_order_option);
-
-    blocks_per_batch = uint64_t{problem_blocks_m} * uint64_t{problem_blocks_n};
-    blocks_per_problem = blocks_per_batch * uint64_t{problem_blocks_l};
-  }
-
-  __host__ __device__ GemmTile
-  tile_for_linear_idx(uint64_t linear_idx, uint32_t cta_m_in_cluster = 0,
-                      uint32_t cta_n_in_cluster = 0) const {
-    if (linear_idx >= blocks_per_problem || blocks_per_batch == 0) {
-      return {};
-    }
-
-    uint64_t work_idx_l = linear_idx / blocks_per_batch;
-    uint64_t remainder = linear_idx - work_idx_l * blocks_per_batch;
-
-    uint32_t cluster_major =
-        raster_order == RasterOrder::AlongN ? cluster_shape_n : cluster_shape_m;
-    uint32_t cluster_minor =
-        raster_order == RasterOrder::AlongN ? cluster_shape_m : cluster_shape_n;
-    uint32_t cluster_blk_major = raster_order == RasterOrder::AlongN
-                                     ? problem_blocks_n / cluster_shape_n
-                                     : problem_blocks_m / cluster_shape_m;
-
-    uint64_t blk_per_grid_dim = remainder / cluster_minor;
-    uint64_t cluster_id = blk_per_grid_dim / cluster_major;
-    uint64_t cluster_major_offset =
-        blk_per_grid_dim - cluster_id * cluster_major;
-    uint64_t cluster_minor_offset = raster_order == RasterOrder::AlongN
-                                        ? cta_m_in_cluster
-                                        : cta_n_in_cluster;
-
-    uint64_t swizzle_mask = (uint64_t{1} << log_swizzle_size) - 1u;
-    uint64_t offset = cluster_id & swizzle_mask;
-    uint64_t extra = cluster_id >> log_swizzle_size;
-    uint64_t cluster_idx_major =
-        cluster_blk_major == 0 ? 0 : extra % cluster_blk_major;
-    uint64_t cluster_idx_minor_div_swizzle =
-        cluster_blk_major == 0 ? 0 : extra / cluster_blk_major;
-    uint64_t cluster_idx_minor =
-        cluster_idx_minor_div_swizzle * (uint64_t{1} << log_swizzle_size) +
-        offset;
-
-    uint32_t minor_work_idx = static_cast<uint32_t>(
-        cluster_idx_minor * cluster_minor + cluster_minor_offset);
-    uint32_t major_work_idx = static_cast<uint32_t>(
-        cluster_idx_major * cluster_major + cluster_major_offset);
-
-    uint32_t tile_m =
-        raster_order == RasterOrder::AlongN ? minor_work_idx : major_work_idx;
-    uint32_t tile_n =
-        raster_order == RasterOrder::AlongN ? major_work_idx : minor_work_idx;
-    bool in_bounds = tile_m < logical_tiles_m && tile_n < logical_tiles_n &&
-                     work_idx_l < problem_blocks_l;
-
-    return {static_cast<int>(tile_m), static_cast<int>(tile_n),
-            static_cast<int>(work_idx_l), true, in_bounds};
-  }
-
-  __host__ __device__ static dim3 get_grid_shape(
-      int M, int N, int cta_m, int cta_n, int sm_count, int batch_count = 1,
-      uint32_t cluster_m = 1, uint32_t cluster_n = 1, int max_swizzle_size = 1,
-      RasterOrderOptions raster_order_option = RasterOrderOptions::Heuristic,
-      int max_active_clusters = 0, bool truncate_by_problem_size = true) {
-    PersistentTileSchedulerSm90Params params;
-    params.initialize(M, N, cta_m, cta_n, batch_count, cluster_m, cluster_n,
-                      max_swizzle_size, raster_order_option);
-    return get_grid_shape(params, sm_count, max_active_clusters,
-                          truncate_by_problem_size);
-  }
-
-  __host__ __device__ static dim3
-  get_grid_shape(PersistentTileSchedulerSm90Params const &params, int sm_count,
-                 int max_active_clusters = 0,
-                 bool truncate_by_problem_size = true) {
-    if (params.blocks_per_problem == 0) {
-      return dim3{0, 1, 1};
-    }
-
-    uint32_t cluster_m = params.cluster_shape_m;
-    uint32_t cluster_n = params.cluster_shape_n;
-    uint32_t cluster_size = detail::max_u32(cluster_m * cluster_n, 1u);
-    int problem_blocks_total = static_cast<int>(params.blocks_per_problem);
-
-    dim3 launch_grid = params.raster_order == RasterOrder::AlongN
-                           ? dim3(cluster_m, 1, 1)
-                           : dim3(1, cluster_n, 1);
-
-    if (cluster_size == 1) {
-      if (params.raster_order == RasterOrder::AlongN) {
-        launch_grid.y = truncate_by_problem_size
-                            ? detail::min_int(sm_count, problem_blocks_total)
-                            : sm_count;
-      } else {
-        launch_grid.x = truncate_by_problem_size
-                            ? detail::min_int(sm_count, problem_blocks_total)
-                            : sm_count;
-      }
-    } else if (max_active_clusters != 0 &&
-               max_active_clusters * static_cast<int>(cluster_size) <=
-                   sm_count) {
-      if (params.raster_order == RasterOrder::AlongN) {
-        int active_ctas = max_active_clusters * static_cast<int>(cluster_n);
-        int problem_ctas = problem_blocks_total / static_cast<int>(cluster_m);
-        launch_grid.y = truncate_by_problem_size
-                            ? detail::min_int(active_ctas, problem_ctas)
-                            : active_ctas;
-      } else {
-        int active_ctas = max_active_clusters * static_cast<int>(cluster_m);
-        int problem_ctas = problem_blocks_total / static_cast<int>(cluster_n);
-        launch_grid.x = truncate_by_problem_size
-                            ? detail::min_int(active_ctas, problem_ctas)
-                            : active_ctas;
-      }
-    } else {
-      constexpr int kMaxSmPerGpcSm90 = 18;
-      uint32_t cta_per_device = get_max_cta_occupancy(
-          kMaxSmPerGpcSm90, cluster_m, cluster_n, sm_count);
-      if (params.raster_order == RasterOrder::AlongN) {
-        int active_ctas = static_cast<int>(cta_per_device / cluster_m);
-        int problem_ctas = problem_blocks_total / static_cast<int>(cluster_m);
-        launch_grid.y = truncate_by_problem_size
-                            ? detail::min_int(active_ctas, problem_ctas)
-                            : active_ctas;
-      } else {
-        int active_ctas = static_cast<int>(cta_per_device / cluster_n);
-        int problem_ctas = problem_blocks_total / static_cast<int>(cluster_n);
-        launch_grid.x = truncate_by_problem_size
-                            ? detail::min_int(active_ctas, problem_ctas)
-                            : active_ctas;
-      }
-    }
-
-    return launch_grid;
-  }
-};
-
-class GemmPersistentTileScheduler {
-public:
-  static constexpr uint32_t kNumMmaWarpGroups = 2;
-
-  __device__ explicit GemmPersistentTileScheduler(
-      PersistentTileSchedulerSm90Params const &params)
-      : params_(params) {
-    if (params_.raster_order == RasterOrder::AlongN) {
-      current_work_linear_idx_ =
-          uint64_t{blockIdx.x} + uint64_t{blockIdx.y} * uint64_t{gridDim.x};
-    } else {
-      current_work_linear_idx_ =
-          uint64_t{blockIdx.x} * uint64_t{gridDim.y} + uint64_t{blockIdx.y};
-    }
-    total_grid_size_ =
-        uint64_t{gridDim.x} * uint64_t{gridDim.y} * uint64_t{gridDim.z};
-  }
-
-  __device__ GemmTile current() const {
-    dim3 cluster_cta =
-        ::cuda_ops_core::detail::sm90::cluster::block_id_in_cluster();
-    return params_.tile_for_linear_idx(current_work_linear_idx_, cluster_cta.x,
-                                       cluster_cta.y);
-  }
-
-  __device__ void advance_to_next_work(uint32_t advance_count = 1) {
-    current_work_linear_idx_ += total_grid_size_ * uint64_t{advance_count};
-  }
-
-  __device__ GemmTile next(uint32_t advance_count = 1) {
-    advance_to_next_work(advance_count);
-    return current();
-  }
-
-  __device__ GemmTile initial_consumer_tile(uint32_t consumer_warp_group_idx) {
-    if (consumer_warp_group_idx == 1) {
-      advance_to_next_work();
-    }
-    return current();
-  }
-
-  __device__ GemmTile next_consumer_tile() { return next(kNumMmaWarpGroups); }
-
-  __device__ GemmTile next_producer_tile() { return next(); }
-
-  __device__ bool is_last_tile(uint32_t advance_count = 1) const {
-    dim3 cluster_cta =
-        ::cuda_ops_core::detail::sm90::cluster::block_id_in_cluster();
-    return !params_
-                .tile_for_linear_idx(current_work_linear_idx_ +
-                                         total_grid_size_ *
-                                             uint64_t{advance_count},
-                                     cluster_cta.x, cluster_cta.y)
-                .valid;
-  }
-
-  __device__ bool is_last_consumer_tile() const {
-    return is_last_tile(kNumMmaWarpGroups);
-  }
-
-private:
-  PersistentTileSchedulerSm90Params params_{};
-  uint64_t current_work_linear_idx_ = 0;
-  uint64_t total_grid_size_ = 1;
-};
-
-inline int query_sm_count(int device = -1) {
-  if (device < 0 && cudaGetDevice(&device) != cudaSuccess) {
-    return 0;
-  }
-
-  int sm_count = 0;
-  cudaDeviceGetAttribute(&sm_count, cudaDevAttrMultiProcessorCount, device);
-  return sm_count;
-}
+using namespace ::cuda_ops_core::detail::sm90::pipeline;
+using namespace ::cuda_ops_core::detail::sm90::shared_memory;
+using namespace ::cuda_ops_core::detail::sm90::scheduler;
+using namespace ::cuda_ops_core::detail::sm90::tma;
+using namespace ::cuda_ops_core::detail::sm90::wgmma;
 
 namespace detail {
 
 using Element = half;
+
+template <int Turns> class OrderedBarrier {
+public:
+  static_assert(Turns == 2,
+                "OrderedBarrier currently supports two alternating turns");
+
+  struct SharedStorage {
+    uint64_t barriers[Turns];
+  };
+
+  struct State {
+    uint32_t phase = 0;
+
+    __device__ __forceinline__ void advance() { phase ^= 1u; }
+  };
+
+  __device__ explicit OrderedBarrier(SharedStorage &storage)
+      : storage_(&storage) {}
+
+  __device__ void initialize(uint32_t arrival_count = 1) {
+#pragma unroll
+    for (int i = 0; i < Turns; ++i) {
+      ::cuda_ops_core::detail::sm90::barrier::init_barrier(
+          &storage_->barriers[i], arrival_count);
+    }
+  }
+
+  __device__ void wait(State state, uint32_t turn) {
+    ::cuda_ops_core::detail::sm90::barrier::wait_barrier(
+        &storage_->barriers[turn], state.phase);
+  }
+
+  __device__ void arrive(uint32_t turn, uint32_t count = 1) {
+    ::cuda_ops_core::detail::sm90::barrier::arrive_barrier(
+        &storage_->barriers[turn], count);
+  }
+
+  __device__ void arrive_next(uint32_t turn, uint32_t count = 1) {
+    arrive((turn + 1u) % Turns, count);
+  }
+
+private:
+  SharedStorage *storage_ = nullptr;
+};
 
 constexpr int kBlockM = 128;
 constexpr int kBlockN = 128;
 constexpr int kBlockK = 64;
 constexpr int kStages = 6;
 constexpr int kWarpGroupSize = 128;
-constexpr int kNumMmaWarpGroups = 2;
-constexpr int kNumWarpGroups = 1 + kNumMmaWarpGroups;
+constexpr int kNumWarpGroups =
+    1 + static_cast<int>(PingPongTileScheduler::kNumMmaWarpGroups);
 constexpr int kThreads = kNumWarpGroups * kWarpGroupSize;
 constexpr int kInstM = 64;
 constexpr int kClusterM = 2;
@@ -375,7 +85,6 @@ constexpr int kClusterK = 1;
 constexpr int kTmaBAtomN = 64;
 constexpr int kTmaBAtomK = 8;
 constexpr int kTmaBAtomsPerRank = (kBlockK / kTmaBAtomK) / kClusterM;
-constexpr uint64_t kTmaCacheHintEvictLast = 0x14F0000000000000ull;
 static_assert(kBlockN % kClusterM == 0);
 static_assert(kBlockN % kTmaBAtomN == 0);
 static_assert(kBlockK % kTmaBAtomK == 0);
@@ -455,175 +164,11 @@ inline cudaError_t make_b_row_major_tensor_map(CUtensorMap *map,
 
 #if !defined(__CUDA_ARCH__) || __CUDA_ARCH__ >= 900
 
-__device__ __forceinline__ uint64_t matrix_descriptor_encode(uint64_t x) {
-  return (x & 0x3ffff) >> 4;
-}
-
-__device__ __forceinline__ uint64_t make_smem_desc_k_major(Element *ptr) {
-  uint32_t addr = static_cast<uint32_t>(__cvta_generic_to_shared(ptr));
-  uint64_t desc = matrix_descriptor_encode(addr);
-  desc |= matrix_descriptor_encode(16) << 16;
-  desc |= matrix_descriptor_encode(1024) << 32;
-  desc |= 1ull << 62;
-  return desc;
-}
-
-__device__ __forceinline__ uint64_t make_smem_desc_mn_major_b(Element *ptr) {
-  uint32_t addr = static_cast<uint32_t>(__cvta_generic_to_shared(ptr));
-  uint64_t desc = matrix_descriptor_encode(addr);
-  desc |= matrix_descriptor_encode(1024) << 16;
-  desc |= matrix_descriptor_encode(2048) << 32;
-  desc |= 1ull << 62;
-  return desc;
-}
-
 __device__ __forceinline__ int b_mn_smem_offset(int n_offset, int k_offset) {
   return (n_offset / kTmaBAtomN) * (kTmaBAtomN * kTmaBAtomK) +
          (k_offset / kTmaBAtomK) * (kBlockN * kTmaBAtomK);
 }
 
-template <int RegCount>
-__device__ __forceinline__ void warpgroup_reg_alloc() {
-  asm volatile("setmaxnreg.inc.sync.aligned.u32 %0;\n" : : "n"(RegCount));
-}
-
-template <int RegCount>
-__device__ __forceinline__ void warpgroup_reg_dealloc() {
-  asm volatile("setmaxnreg.dec.sync.aligned.u32 %0;\n" : : "n"(RegCount));
-}
-
-__device__ __forceinline__ void wgmma_fence() {
-  asm volatile("wgmma.fence.sync.aligned;\n" ::: "memory");
-}
-
-__device__ __forceinline__ void wgmma_commit_group() {
-  asm volatile("wgmma.commit_group.sync.aligned;\n" ::: "memory");
-}
-
-template <int PendingGroups>
-__device__ __forceinline__ void wgmma_wait_group() {
-  static_assert(PendingGroups >= 0 && PendingGroups <= 7);
-  asm volatile("wgmma.wait_group.sync.aligned %0;\n" ::"n"(PendingGroups)
-               : "memory");
-}
-
-template <int ScaleD, int ScaleA, int ScaleB, int TransA, int TransB>
-__device__ __forceinline__ void wgmma_m64n128k16_f16(float d[8][8],
-                                                     Element *sA,
-                                                     Element *sB) {
-  uint64_t desc_a = make_smem_desc_k_major(sA);
-  uint64_t desc_b = make_smem_desc_mn_major_b(sB);
-  asm volatile(
-      "{\n"
-      ".reg .pred p;\n"
-      "setp.ne.b32 p, %66, 0;\n"
-      "wgmma.mma_async.sync.aligned.m64n128k16.f32.f16.f16 "
-      "{%0,   %1,   %2,   %3,   %4,   %5,   %6,   %7,   "
-      " %8,   %9,   %10,  %11,  %12,  %13,  %14,  %15,  "
-      " %16,  %17,  %18,  %19,  %20,  %21,  %22,  %23,  "
-      " %24,  %25,  %26,  %27,  %28,  %29,  %30,  %31,  "
-      " %32,  %33,  %34,  %35,  %36,  %37,  %38,  %39,  "
-      " %40,  %41,  %42,  %43,  %44,  %45,  %46,  %47,  "
-      " %48,  %49,  %50,  %51,  %52,  %53,  %54,  %55,  "
-      " %56,  %57,  %58,  %59,  %60,  %61,  %62,  %63},"
-      " %64,"
-      " %65,"
-      " p,    %67,  %68,  %69,  %70;\n"
-      "}\n"
-      : "+f"(d[0][0]), "+f"(d[0][1]), "+f"(d[0][2]), "+f"(d[0][3]),
-        "+f"(d[0][4]), "+f"(d[0][5]), "+f"(d[0][6]), "+f"(d[0][7]),
-        "+f"(d[1][0]), "+f"(d[1][1]), "+f"(d[1][2]), "+f"(d[1][3]),
-        "+f"(d[1][4]), "+f"(d[1][5]), "+f"(d[1][6]), "+f"(d[1][7]),
-        "+f"(d[2][0]), "+f"(d[2][1]), "+f"(d[2][2]), "+f"(d[2][3]),
-        "+f"(d[2][4]), "+f"(d[2][5]), "+f"(d[2][6]), "+f"(d[2][7]),
-        "+f"(d[3][0]), "+f"(d[3][1]), "+f"(d[3][2]), "+f"(d[3][3]),
-        "+f"(d[3][4]), "+f"(d[3][5]), "+f"(d[3][6]), "+f"(d[3][7]),
-        "+f"(d[4][0]), "+f"(d[4][1]), "+f"(d[4][2]), "+f"(d[4][3]),
-        "+f"(d[4][4]), "+f"(d[4][5]), "+f"(d[4][6]), "+f"(d[4][7]),
-        "+f"(d[5][0]), "+f"(d[5][1]), "+f"(d[5][2]), "+f"(d[5][3]),
-        "+f"(d[5][4]), "+f"(d[5][5]), "+f"(d[5][6]), "+f"(d[5][7]),
-        "+f"(d[6][0]), "+f"(d[6][1]), "+f"(d[6][2]), "+f"(d[6][3]),
-        "+f"(d[6][4]), "+f"(d[6][5]), "+f"(d[6][6]), "+f"(d[6][7]),
-        "+f"(d[7][0]), "+f"(d[7][1]), "+f"(d[7][2]), "+f"(d[7][3]),
-        "+f"(d[7][4]), "+f"(d[7][5]), "+f"(d[7][6]), "+f"(d[7][7])
-      : "l"(desc_a), "l"(desc_b), "r"(int32_t(ScaleD)),
-        "n"(int32_t(ScaleA)), "n"(int32_t(ScaleB)), "n"(int32_t(TransA)),
-        "n"(int32_t(TransB)));
-}
-
-__device__ __forceinline__ void init_barrier(uint64_t *bar,
-                                             int arrive_count) {
-  uint32_t bar_ptr = static_cast<uint32_t>(__cvta_generic_to_shared(bar));
-  asm volatile("mbarrier.init.shared::cta.b64 [%0], %1;\n" ::"r"(bar_ptr),
-               "r"(arrive_count)
-               : "memory");
-}
-
-__device__ __forceinline__ void wait_barrier(uint64_t *bar, int phase) {
-  uint32_t bar_ptr = static_cast<uint32_t>(__cvta_generic_to_shared(bar));
-  asm volatile("{\n"
-               ".reg .pred p;\n"
-               "wait_again:\n"
-               "mbarrier.try_wait.parity.shared::cta.b64 p, [%0], %1;\n"
-               "@p bra.uni wait_done;\n"
-               "bra.uni wait_again;\n"
-               "wait_done:\n"
-               "}\n" ::"r"(bar_ptr),
-               "r"(phase));
-}
-
-__device__ __forceinline__ void arrive_barrier(uint64_t *bar, int count = 1) {
-  uint32_t bar_ptr = static_cast<uint32_t>(__cvta_generic_to_shared(bar));
-  asm volatile("mbarrier.arrive.release.cta.shared::cta.b64 _, [%0], %1;\n"
-               ::"r"(bar_ptr), "r"(count)
-               : "memory");
-}
-
-__device__ __forceinline__ void expect_tma_bytes(uint64_t *bar,
-                                                 uint32_t bytes) {
-  uint32_t bar_ptr = static_cast<uint32_t>(__cvta_generic_to_shared(bar));
-  asm volatile("mbarrier.arrive.expect_tx.shared::cta.b64 _, [%0], %1;\n"
-               ::"r"(bar_ptr), "r"(bytes)
-               : "memory");
-}
-
-__device__ __forceinline__ void fence_barrier_init() {
-  asm volatile("fence.mbarrier_init.release.cluster;\n" ::: "memory");
-}
-
-__device__ __forceinline__ void tma_load(Element *dst,
-                                         void const *tensor_map,
-                                         uint64_t *bar,
-                                         int global_col,
-                                         int global_row) {
-  uint64_t map_ptr = reinterpret_cast<uint64_t>(tensor_map);
-  uint32_t dst_ptr = static_cast<uint32_t>(__cvta_generic_to_shared(dst));
-  uint32_t bar_ptr = static_cast<uint32_t>(__cvta_generic_to_shared(bar));
-  asm volatile(
-      "cp.async.bulk.tensor.3d.shared::cluster.global.mbarrier::complete_tx::bytes"
-      " [%0], [%1, {%3, %4, %5}], [%2];\n" ::"r"(dst_ptr),
-      "l"(map_ptr), "r"(bar_ptr), "n"(0), "r"(global_row),
-      "r"(global_col / 64)
-      : "memory");
-}
-
-__device__ __forceinline__ void tma_load_b_mn_multicast(Element *dst,
-                                                        void const *tensor_map,
-                                                        uint64_t *bar,
-                                                        uint16_t multicast_mask,
-                                                        int global_n,
-                                                        int global_k) {
-  uint64_t map_ptr = reinterpret_cast<uint64_t>(tensor_map);
-  uint32_t dst_ptr = static_cast<uint32_t>(__cvta_generic_to_shared(dst));
-  uint32_t bar_ptr = static_cast<uint32_t>(__cvta_generic_to_shared(bar));
-  asm volatile(
-      "cp.async.bulk.tensor.3d.shared::cluster.global.mbarrier::complete_tx::bytes.multicast::cluster.L2::cache_hint"
-      " [%0], [%1, {%4, %5, %6}], [%2], %3, %7;\n" ::"r"(dst_ptr),
-      "l"(map_ptr), "r"(bar_ptr), "h"(multicast_mask), "n"(0),
-      "r"(global_k), "r"(global_n / kTmaBAtomN),
-      "l"(kTmaCacheHintEvictLast)
-      : "memory");
-}
 
 __device__ __forceinline__ uint16_t multicast_mask_b_cluster_m() {
   uint16_t mask = 0;
@@ -636,70 +181,8 @@ __device__ __forceinline__ uint16_t multicast_mask_b_cluster_m() {
   return mask;
 }
 
-__device__ __forceinline__ void tma_store(void const *tensor_map,
-                                          Element *src,
-                                          int global_row,
-                                          int global_col) {
-  uint64_t map_ptr = reinterpret_cast<uint64_t>(tensor_map);
-  uint32_t src_ptr = static_cast<uint32_t>(__cvta_generic_to_shared(src));
-  asm volatile("cp.async.bulk.tensor.3d.global.shared::cta.tile.bulk_group"
-               " [%0, {%2, %3, %4}], [%1];\n" ::"l"(map_ptr),
-               "r"(src_ptr), "n"(0), "r"(global_row), "r"(global_col / 64)
-               : "memory");
-}
-
-__device__ __forceinline__ void arrive_barrier_remote(uint64_t *bar,
-                                                      uint32_t dst_cta_rank) {
-  uint32_t bar_ptr = static_cast<uint32_t>(__cvta_generic_to_shared(bar));
-  asm volatile("{\n"
-               ".reg .b32 remote_bar;\n"
-               "mapa.shared::cluster.u32 remote_bar, %0, %1;\n"
-               "mbarrier.arrive.shared::cluster.b64 _, [remote_bar];\n"
-               "}\n" ::"r"(bar_ptr),
-               "r"(dst_cta_rank)
-               : "memory");
-}
-
-__device__ __forceinline__ void arrive_cluster_empty_barrier(uint64_t *bar) {
-  uint32_t rank =
-      ::cuda_ops_core::detail::sm90::cluster::block_rank_in_cluster();
-  arrive_barrier(bar);
-  arrive_barrier_remote(bar, rank ^ 1u);
-}
-
-__device__ __forceinline__ void tma_commit_group() {
-  asm volatile("cp.async.bulk.commit_group;\n" ::: "memory");
-}
-
-template <int PendingGroups>
-__device__ __forceinline__ void tma_wait_group() {
-  asm volatile("cp.async.bulk.wait_group.read %0;\n" ::"n"(PendingGroups)
-               : "memory");
-}
-
-__device__ __forceinline__ void fence_async_shared() {
-  asm volatile("fence.proxy.async.shared::cta;\n" ::: "memory");
-}
-
 __device__ __forceinline__ void warpgroup_sync() {
   asm volatile("bar.sync 1, %0;\n" ::"n"(kWarpGroupSize) : "memory");
-}
-
-__device__ __forceinline__ void stmatrix(Element *smem_ptr, Element src[8]) {
-  uint32_t smem = static_cast<uint32_t>(__cvta_generic_to_shared(smem_ptr));
-  uint32_t *regs = reinterpret_cast<uint32_t *>(src);
-  asm volatile(
-      "stmatrix.sync.aligned.x4.m8n8.shared.b16 [%0], "
-      "{%1, %2, %3, %4};\n" ::"r"(smem),
-      "r"(regs[0]), "r"(regs[1]), "r"(regs[2]), "r"(regs[3]));
-}
-
-__device__ __forceinline__ int swizzle_128b_half_offset(uint32_t base_addr,
-                                                        int half_offset) {
-  uint32_t const byte_addr =
-      base_addr + static_cast<uint32_t>(half_offset) * sizeof(Element);
-  uint32_t const swizzled_byte_addr = byte_addr ^ ((byte_addr & 0x380u) >> 3);
-  return static_cast<int>((swizzled_byte_addr - base_addr) / sizeof(Element));
 }
 
 __device__ __forceinline__ void store_accumulators_tma(
@@ -726,7 +209,8 @@ __device__ __forceinline__ void store_accumulators_tma(
       int const col_in_chunk = col - col_chunk * 64;
       int const addr = mma_m * kInstM * kBlockN +
                        col_chunk * kInstM * 64 + row * 64 + col_in_chunk;
-      stmatrix(&smem.C[swizzle_128b_half_offset(smem_c_addr, addr)], frag);
+      store_matrix_x4_m8n8(
+          &smem.C[swizzled_half_offset_128b(smem_c_addr, addr)], frag);
     }
 
     fence_async_shared();
@@ -738,20 +222,6 @@ __device__ __forceinline__ void store_accumulators_tma(
     }
   }
   tma_wait_group<0>();
-}
-
-__device__ __forceinline__ void stage_next(int &stage, int &phase) {
-  ++stage;
-  if (stage == kStages) {
-    stage = 0;
-    phase ^= 1;
-  }
-}
-
-__device__ __forceinline__ void stage_advance(int &stage, int &phase,
-                                              int steps) {
-  phase ^= ((stage + steps) / kStages) & 1;
-  stage = (stage + steps) % kStages;
 }
 
 __device__ __forceinline__ void clear_accumulators(float acc[2][8][8]) {
@@ -782,53 +252,34 @@ __device__ __forceinline__ void keep_accumulators_live(float acc[2][8][8]) {
 
 template <bool ReleaseStages>
 __device__ __forceinline__ void consume_k_tile(SharedStorage &smem,
-                                               uint64_t *full_barriers,
-                                               uint64_t *empty_barriers,
-                                               int &stage,
-                                               int &phase,
-                                               int &previous_stage,
+                                               Pipeline<kStages> &pipeline,
+                                               PipelineState<kStages> &read_pipe,
+                                               PipelineState<kStages> &release_pipe,
                                                int warp_group_thread_idx,
                                                float acc[2][8][8]) {
-  wait_barrier(&full_barriers[stage], phase);
+  pipeline.consumer_wait(read_pipe);
   wgmma_fence();
 
 #pragma unroll
   for (int mma_m = 0; mma_m < kBlockM / kInstM; ++mma_m) {
 #pragma unroll
     for (int mma_k = 0; mma_k < kBlockK; mma_k += 16) {
-      Element *sA = &smem.A[stage * kBlockM * kBlockK +
+      Element *sA = &smem.A[read_pipe.stage_idx * kBlockM * kBlockK +
                             mma_m * kInstM * kBlockK + mma_k];
       Element *sB =
-          &smem.B[stage * kBlockN * kBlockK + mma_k * kBlockN];
-      wgmma_m64n128k16_f16<1, 1, 1, 0, 1>(acc[mma_m], sA, sB);
+          &smem.B[read_pipe.stage_idx * kBlockN * kBlockK + mma_k * kBlockN];
+      wgmma_m64n128k16_f32_f16_f16<1, 1, 1, 0, 1>(acc[mma_m], sA, sB);
     }
   }
 
   wgmma_commit_group();
   if constexpr (ReleaseStages) {
     wgmma_wait_group<1>();
-    if (warp_group_thread_idx == 0) {
-      arrive_cluster_empty_barrier(&empty_barriers[previous_stage]);
-    }
+    pipeline.consumer_release(
+        release_pipe, static_cast<uint32_t>(warp_group_thread_idx));
+    release_pipe.advance();
   }
-  previous_stage = stage;
-  stage_next(stage, phase);
-}
-
-__device__ __forceinline__ void drain_invalid_tile(uint64_t *full_barriers,
-                                                   uint64_t *empty_barriers,
-                                                   int k_tiles,
-                                                   int &stage,
-                                                   int &phase,
-                                                   int warp_group_thread_idx) {
-  for (int k = 0; k < k_tiles; ++k) {
-    int current_stage = stage;
-    wait_barrier(&full_barriers[current_stage], phase);
-    if (warp_group_thread_idx == 0) {
-      arrive_cluster_empty_barrier(&empty_barriers[current_stage]);
-    }
-    stage_next(stage, phase);
-  }
+  read_pipe.advance();
 }
 
 #endif // !defined(__CUDA_ARCH__) || __CUDA_ARCH__ >= 900
@@ -850,31 +301,29 @@ __global__ __launch_bounds__(detail::kThreads) void hgemm_pingpong_kernel(
   extern __shared__ __align__(128) uint8_t dynamic_smem[];
   SharedStorage &smem = *reinterpret_cast<SharedStorage *>(dynamic_smem);
 
-  __shared__ __align__(8) uint64_t full_barriers[kStages];
-  __shared__ __align__(8) uint64_t empty_barriers[kStages];
-  __shared__ __align__(8) uint64_t math_turn[2];
-  __shared__ __align__(8) uint64_t epilogue_turn[2];
+  __shared__ Pipeline<kStages>::SharedStorage pipeline_storage;
+  __shared__ OrderedBarrier<2>::SharedStorage math_turn_storage;
+  __shared__ OrderedBarrier<2>::SharedStorage epilogue_turn_storage;
+
+  Pipeline<kStages> pipeline(pipeline_storage, kClusterM + kClusterN - 1);
+  OrderedBarrier<2> math_turn(math_turn_storage);
+  OrderedBarrier<2> epilogue_turn(epilogue_turn_storage);
 
   int const thread_idx = static_cast<int>(threadIdx.x);
   int const warp_group_idx = thread_idx / kWarpGroupSize;
   int const warp_group_thread_idx = thread_idx % kWarpGroupSize;
 
   if (thread_idx == 0) {
-    for (int i = 0; i < kStages; ++i) {
-      init_barrier(&full_barriers[i], 1);
-      init_barrier(&empty_barriers[i], kClusterM * kClusterN);
-    }
-    init_barrier(&math_turn[0], 1);
-    init_barrier(&math_turn[1], 1);
-    init_barrier(&epilogue_turn[0], 1);
-    init_barrier(&epilogue_turn[1], 1);
+    pipeline.initialize(kClusterM * kClusterN);
+    math_turn.initialize();
+    epilogue_turn.initialize();
   }
   __syncthreads();
-  fence_barrier_init();
+  pipeline.fence_barrier_init();
   ::cuda_ops_core::detail::sm90::cluster::cluster_sync();
 
   int const k_tiles = K / kBlockK;
-  GemmPersistentTileScheduler scheduler(scheduler_params);
+  PingPongTileScheduler scheduler(scheduler_params);
 
   enum class WarpGroupRole {
     Producer,
@@ -890,8 +339,7 @@ __global__ __launch_bounds__(detail::kThreads) void hgemm_pingpong_kernel(
     warpgroup_reg_dealloc<40>();
 
     if (warp_group_thread_idx == 0) {
-      int stage = 0;
-      int phase = 0;
+      PipelineState<kStages> smem_pipe_write;
       uint32_t const cluster_rank =
           ::cuda_ops_core::detail::sm90::cluster::block_rank_in_cluster();
       uint32_t const cluster_m_rank =
@@ -905,28 +353,22 @@ __global__ __launch_bounds__(detail::kThreads) void hgemm_pingpong_kernel(
       for (GemmTile tile = scheduler.current(); tile.valid;
            tile = scheduler.next_producer_tile()) {
         for (int k_tile = 0; k_tile < k_tiles; ++k_tile) {
-          wait_barrier(&empty_barriers[stage], phase);
-          bool const has_valid_b_tile =
-              tile.valid && tile.n >= 0 &&
-              static_cast<uint32_t>(tile.n) <
-                  scheduler_params.logical_tiles_n;
-          uint32_t expected_bytes = 0;
-          if (tile.in_bounds) {
-            expected_bytes += load_bytes_a;
-          }
+          pipeline.producer_acquire(smem_pipe_write);
+          bool const has_valid_b_tile = tile.valid;
+          uint32_t expected_bytes = load_bytes_a;
           if (has_valid_b_tile &&
               (b_multicast_mask & (uint16_t{1u} << cluster_rank)) != 0) {
             expected_bytes += load_bytes_b;
           }
 
-          if (expected_bytes != 0) {
-            expect_tma_bytes(&full_barriers[stage], expected_bytes);
-          }
-          if (tile.in_bounds) {
-            tma_load(&smem.A[stage * kBlockM * kBlockK], &tensor_map_a,
-                     &full_barriers[stage], k_tile * kBlockK,
-                     tile.m * kBlockM);
-          }
+          pipeline.producer_expect_transaction(smem_pipe_write,
+                                               expected_bytes);
+          uint64_t *full_barrier =
+              pipeline.producer_get_barrier(smem_pipe_write);
+          tma_load(&smem.A[smem_pipe_write.stage_idx * kBlockM * kBlockK],
+                   &tensor_map_a, full_barrier,
+                   tile.m * kBlockM,
+                   k_tile * kBlockK / 64);
           if (has_valid_b_tile && b_multicast_mask != 0) {
 #pragma unroll
             for (int k_atom_iter = 0; k_atom_iter < kTmaBAtomsPerRank;
@@ -936,18 +378,16 @@ __global__ __launch_bounds__(detail::kThreads) void hgemm_pingpong_kernel(
                    static_cast<int>(cluster_m_rank)) *
                   kTmaBAtomK;
               Element *b_atom =
-                  &smem.B[stage * kBlockN * kBlockK +
+                  &smem.B[smem_pipe_write.stage_idx * kBlockN * kBlockK +
                           b_mn_smem_offset(0, k_atom)];
-              tma_load_b_mn_multicast(
-                  b_atom, &tensor_map_b, &full_barriers[stage],
-                  b_multicast_mask, tile.n * kBlockN,
-                  k_tile * kBlockK + k_atom);
+              tma_multicast_load(
+                  b_atom, &tensor_map_b,
+                  full_barrier, b_multicast_mask, k_tile * kBlockK + k_atom,
+                  tile.n * kBlockN / kTmaBAtomN);
             }
           }
-          if (expected_bytes == 0) {
-            arrive_barrier(&full_barriers[stage]);
-          }
-          stage_next(stage, phase);
+          pipeline.producer_commit(smem_pipe_write, expected_bytes);
+          smem_pipe_write.advance();
         }
       }
     }
@@ -957,73 +397,58 @@ __global__ __launch_bounds__(detail::kThreads) void hgemm_pingpong_kernel(
   warpgroup_reg_alloc<232>();
 
   int const consumer_idx = role == WarpGroupRole::Consumer0 ? 0 : 1;
-  int stage = 0;
-  int phase = 0;
-  int turn_phase = 0;
+  OrderedBarrier<2>::State turn_state;
+  PipelineState<kStages> smem_pipe_read;
+  PipelineState<kStages> smem_pipe_release = smem_pipe_read;
 
-  if (consumer_idx == 0 && warp_group_thread_idx == 0) {
+  if (consumer_idx == 0) {
     for (int i = 0; i < kStages; ++i) {
-      arrive_cluster_empty_barrier(&empty_barriers[i]);
+      pipeline.consumer_release(static_cast<uint32_t>(i),
+                                static_cast<uint32_t>(warp_group_thread_idx));
     }
   }
 
   if (consumer_idx == 1) {
     if (warp_group_thread_idx == 0) {
-      arrive_barrier(&math_turn[0]);
-      arrive_barrier(&epilogue_turn[0]);
+      math_turn.arrive(0);
+      epilogue_turn.arrive(0);
     }
-    stage_advance(stage, phase, k_tiles);
+    smem_pipe_read.advance(k_tiles);
+    smem_pipe_release.advance(k_tiles);
   }
 
   for (GemmTile tile = scheduler.initial_consumer_tile(consumer_idx);
        tile.valid; tile = scheduler.next_consumer_tile()) {
-    wait_barrier(&math_turn[consumer_idx], turn_phase);
-
-    if (!tile.in_bounds) {
-      drain_invalid_tile(full_barriers, empty_barriers, k_tiles, stage, phase,
-                         warp_group_thread_idx);
-      stage_advance(stage, phase, k_tiles);
-      if (warp_group_thread_idx == 0) {
-        arrive_barrier(&math_turn[1 - consumer_idx]);
-      }
-
-      wait_barrier(&epilogue_turn[consumer_idx], turn_phase);
-      if (warp_group_thread_idx == 0) {
-        arrive_barrier(&epilogue_turn[1 - consumer_idx]);
-      }
-      turn_phase ^= 1;
-      continue;
-    }
+    math_turn.wait(turn_state, static_cast<uint32_t>(consumer_idx));
 
     float acc[2][8][8];
     clear_accumulators(acc);
     keep_accumulators_live(acc);
 
-    int previous_stage = stage;
-    consume_k_tile<false>(smem, full_barriers, empty_barriers, stage, phase,
-                          previous_stage, warp_group_thread_idx, acc);
+    consume_k_tile<false>(smem, pipeline, smem_pipe_read, smem_pipe_release,
+                          warp_group_thread_idx, acc);
     for (int k_tile = 1; k_tile < k_tiles; ++k_tile) {
-      consume_k_tile<true>(smem, full_barriers, empty_barriers, stage, phase,
-                           previous_stage, warp_group_thread_idx, acc);
+      consume_k_tile<true>(smem, pipeline, smem_pipe_read, smem_pipe_release,
+                           warp_group_thread_idx, acc);
     }
     wgmma_wait_group<0>();
+    pipeline.consumer_release(
+        smem_pipe_release, static_cast<uint32_t>(warp_group_thread_idx));
+    smem_pipe_release.advance();
+
+    smem_pipe_read.advance(k_tiles);
     if (warp_group_thread_idx == 0) {
-      arrive_cluster_empty_barrier(&empty_barriers[previous_stage]);
+      math_turn.arrive_next(static_cast<uint32_t>(consumer_idx));
     }
 
-    stage_advance(stage, phase, k_tiles);
-    if (warp_group_thread_idx == 0) {
-      arrive_barrier(&math_turn[1 - consumer_idx]);
-    }
-
-    wait_barrier(&epilogue_turn[consumer_idx], turn_phase);
+    epilogue_turn.wait(turn_state, static_cast<uint32_t>(consumer_idx));
 
     store_accumulators_tma(smem, &tensor_map_c, tile, warp_group_thread_idx,
                            acc);
     if (warp_group_thread_idx == 0) {
-      arrive_barrier(&epilogue_turn[1 - consumer_idx]);
+      epilogue_turn.arrive_next(static_cast<uint32_t>(consumer_idx));
     }
-    turn_phase ^= 1;
+    turn_state.advance();
   }
 #else
   (void)tensor_map_a;
@@ -1043,7 +468,8 @@ inline cudaError_t launch_hgemm_128x128x64_pingpong(
   using namespace detail;
 
   if (A == nullptr || B == nullptr || C == nullptr || M <= 0 || N <= 0 ||
-      K <= 0 || M % kBlockM != 0 || N % kBlockN != 0 ||
+      K <= 0 || M % (kBlockM * kClusterM) != 0 ||
+      N % (kBlockN * kClusterN) != 0 ||
       K % kBlockK != 0) {
     return cudaErrorInvalidValue;
   }
@@ -1064,7 +490,7 @@ inline cudaError_t launch_hgemm_128x128x64_pingpong(
   }
 
   PersistentTileSchedulerSm90Params scheduler;
-  scheduler.initialize(M, N, kBlockM, kBlockN, 1, kClusterM, kClusterN,
+  scheduler.initialize(M, N, kBlockM, kBlockN, kClusterM, kClusterN,
                        max_swizzle_size, raster_order);
 
   CUtensorMap map_a;

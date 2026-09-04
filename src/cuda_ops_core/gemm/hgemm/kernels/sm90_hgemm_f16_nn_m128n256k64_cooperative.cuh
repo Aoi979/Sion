@@ -6,11 +6,19 @@
 
 #include "../detail/sm90/barrier.cuh"
 #include "../detail/sm90/cluster.cuh"
-#include "../detail/sm90/scheduler.cuh"
+#include "../detail/sm90/cooperative_tile_scheduler.cuh"
+#include "../detail/sm90/pipeline.cuh"
+#include "../detail/sm90/shared_memory.cuh"
+#include "../detail/sm90/wgmma.cuh"
+#include "../detail/sm90/tma.cuh"
 
 using namespace ::cuda_ops_core::detail::sm90::barrier;
 using namespace ::cuda_ops_core::detail::sm90::cluster;
+using namespace ::cuda_ops_core::detail::sm90::pipeline;
+using namespace ::cuda_ops_core::detail::sm90::shared_memory;
 using namespace ::cuda_ops_core::detail::sm90::scheduler;
+using namespace ::cuda_ops_core::detail::sm90::tma;
+using namespace ::cuda_ops_core::detail::sm90::wgmma;
 
 constexpr int kWarpSize = 32;
 constexpr int kWarpGroupSize = 4 * kWarpSize;
@@ -44,122 +52,6 @@ static_assert(kCoopTmaStoreStages >= 1);
 static_assert(kCoopCtaM * kCoopEpilogueTileN * kCoopEpilogueStagesC >=
               kCoopCtaM * kCoopTmaStoreTileN * kCoopTmaStoreStages);
 
-__device__ __forceinline__ uint64_t matrix_descriptor_encode(uint64_t x) {
-  return (x & 0x3ffff) >> 4;
-}
-
-__device__ __forceinline__ uint64_t make_smem_desc_k_major(Element *ptr) {
-  uint32_t addr = static_cast<uint32_t>(__cvta_generic_to_shared(ptr));
-  uint64_t desc = matrix_descriptor_encode(addr);
-  desc |= matrix_descriptor_encode(16) << 16;
-  desc |= matrix_descriptor_encode(1024) << 32;
-  desc |= 1ull << 62;
-  return desc;
-}
-
-__device__ __forceinline__ uint64_t make_smem_desc_mn_major_b(Element *ptr) {
-  uint32_t addr = static_cast<uint32_t>(__cvta_generic_to_shared(ptr));
-  uint64_t desc = matrix_descriptor_encode(addr);
-  // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#asynchronous-warpgroup-level-leading-dimension-byte-offset
-  desc |= matrix_descriptor_encode(1024) << 16;
-  desc |= matrix_descriptor_encode(4096) << 32;
-  desc |= 1ull << 62;
-  return desc;
-}
-
-__device__ __forceinline__ void wgmma_fence() {
-  asm volatile("wgmma.fence.sync.aligned;\n" ::: "memory");
-}
-
-__device__ __forceinline__ void wgmma_commit_group() {
-  asm volatile("wgmma.commit_group.sync.aligned;\n" ::: "memory");
-}
-
-template <int PendingGroups>
-__device__ __forceinline__ void wgmma_wait_group() {
-  static_assert(PendingGroups >= 0 && PendingGroups <= 7);
-  asm volatile("wgmma.wait_group.sync.aligned %0;\n" ::"n"(PendingGroups)
-               : "memory");
-}
-
-template <int ScaleD, int ScaleA, int ScaleB, int TransA, int TransB>
-__device__ __forceinline__ void wgmma256(float d[kCoopCtaN / 16][8], half *sA,
-                                         half *sB) {
-  uint64_t desc_a = make_smem_desc_k_major(sA);
-  uint64_t desc_b = make_smem_desc_mn_major_b(sB);
-  asm volatile("{\n"
-               ".reg .pred p;\n"
-               "setp.ne.b32 p, %130, 0;\n"
-               "wgmma.mma_async.sync.aligned.m64n256k16.f32.f16.f16 "
-               "{%0,   %1,   %2,   %3,   %4,   %5,   %6,   %7,   "
-               " %8,   %9,   %10,  %11,  %12,  %13,  %14,  %15,  "
-               " %16,  %17,  %18,  %19,  %20,  %21,  %22,  %23,  "
-               " %24,  %25,  %26,  %27,  %28,  %29,  %30,  %31,  "
-               " %32,  %33,  %34,  %35,  %36,  %37,  %38,  %39,  "
-               " %40,  %41,  %42,  %43,  %44,  %45,  %46,  %47,  "
-               " %48,  %49,  %50,  %51,  %52,  %53,  %54,  %55,  "
-               " %56,  %57,  %58,  %59,  %60,  %61,  %62,  %63,  "
-               " %64,  %65,  %66,  %67,  %68,  %69,  %70,  %71,  "
-               " %72,  %73,  %74,  %75,  %76,  %77,  %78,  %79,  "
-               " %80,  %81,  %82,  %83,  %84,  %85,  %86,  %87,  "
-               " %88,  %89,  %90,  %91,  %92,  %93,  %94,  %95,  "
-               " %96,  %97,  %98,  %99,  %100, %101, %102, %103,  "
-               " %104, %105, %106, %107, %108, %109, %110, %111,  "
-               " %112, %113, %114, %115, %116, %117, %118, %119,  "
-               " %120, %121, %122, %123, %124, %125, %126, %127},"
-               " %128,"
-               " %129,"
-               " p,    %131,  %132,  %133,  %134;\n"
-               "}\n"
-               : "+f"(d[0][0]), "+f"(d[0][1]), "+f"(d[0][2]), "+f"(d[0][3]),
-                 "+f"(d[0][4]), "+f"(d[0][5]), "+f"(d[0][6]), "+f"(d[0][7]),
-                 "+f"(d[1][0]), "+f"(d[1][1]), "+f"(d[1][2]), "+f"(d[1][3]),
-                 "+f"(d[1][4]), "+f"(d[1][5]), "+f"(d[1][6]), "+f"(d[1][7]),
-                 "+f"(d[2][0]), "+f"(d[2][1]), "+f"(d[2][2]), "+f"(d[2][3]),
-                 "+f"(d[2][4]), "+f"(d[2][5]), "+f"(d[2][6]), "+f"(d[2][7]),
-                 "+f"(d[3][0]), "+f"(d[3][1]), "+f"(d[3][2]), "+f"(d[3][3]),
-                 "+f"(d[3][4]), "+f"(d[3][5]), "+f"(d[3][6]), "+f"(d[3][7]),
-                 "+f"(d[4][0]), "+f"(d[4][1]), "+f"(d[4][2]), "+f"(d[4][3]),
-                 "+f"(d[4][4]), "+f"(d[4][5]), "+f"(d[4][6]), "+f"(d[4][7]),
-                 "+f"(d[5][0]), "+f"(d[5][1]), "+f"(d[5][2]), "+f"(d[5][3]),
-                 "+f"(d[5][4]), "+f"(d[5][5]), "+f"(d[5][6]), "+f"(d[5][7]),
-                 "+f"(d[6][0]), "+f"(d[6][1]), "+f"(d[6][2]), "+f"(d[6][3]),
-                 "+f"(d[6][4]), "+f"(d[6][5]), "+f"(d[6][6]), "+f"(d[6][7]),
-                 "+f"(d[7][0]), "+f"(d[7][1]), "+f"(d[7][2]), "+f"(d[7][3]),
-                 "+f"(d[7][4]), "+f"(d[7][5]), "+f"(d[7][6]), "+f"(d[7][7]),
-                 "+f"(d[8][0]), "+f"(d[8][1]), "+f"(d[8][2]), "+f"(d[8][3]),
-                 "+f"(d[8][4]), "+f"(d[8][5]), "+f"(d[8][6]), "+f"(d[8][7]),
-                 "+f"(d[9][0]), "+f"(d[9][1]), "+f"(d[9][2]), "+f"(d[9][3]),
-                 "+f"(d[9][4]), "+f"(d[9][5]), "+f"(d[9][6]), "+f"(d[9][7]),
-                 "+f"(d[10][0]), "+f"(d[10][1]), "+f"(d[10][2]), "+f"(d[10][3]),
-                 "+f"(d[10][4]), "+f"(d[10][5]), "+f"(d[10][6]), "+f"(d[10][7]),
-                 "+f"(d[11][0]), "+f"(d[11][1]), "+f"(d[11][2]), "+f"(d[11][3]),
-                 "+f"(d[11][4]), "+f"(d[11][5]), "+f"(d[11][6]), "+f"(d[11][7]),
-                 "+f"(d[12][0]), "+f"(d[12][1]), "+f"(d[12][2]), "+f"(d[12][3]),
-                 "+f"(d[12][4]), "+f"(d[12][5]), "+f"(d[12][6]), "+f"(d[12][7]),
-                 "+f"(d[13][0]), "+f"(d[13][1]), "+f"(d[13][2]), "+f"(d[13][3]),
-                 "+f"(d[13][4]), "+f"(d[13][5]), "+f"(d[13][6]), "+f"(d[13][7]),
-                 "+f"(d[14][0]), "+f"(d[14][1]), "+f"(d[14][2]), "+f"(d[14][3]),
-                 "+f"(d[14][4]), "+f"(d[14][5]), "+f"(d[14][6]), "+f"(d[14][7]),
-                 "+f"(d[15][0]), "+f"(d[15][1]), "+f"(d[15][2]), "+f"(d[15][3]),
-                 "+f"(d[15][4]), "+f"(d[15][5]), "+f"(d[15][6]), "+f"(d[15][7])
-               : "l"(desc_a), "l"(desc_b), "n"(int32_t(ScaleD)),
-                 "n"(int32_t(ScaleA)), "n"(int32_t(ScaleB)),
-                 "n"(int32_t(TransA)), "n"(int32_t(TransB)));
-}
-
-template <uint32_t RegCount> __device__ void warpgroup_reg_dealloc() {
-  asm volatile("setmaxnreg.dec.sync.aligned.u32 %0;\n" : : "n"(RegCount));
-}
-
-template <uint32_t RegCount> __device__ void warpgroup_reg_alloc() {
-  asm volatile("setmaxnreg.inc.sync.aligned.u32 %0;\n" : : "n"(RegCount));
-}
-
-__device__ __forceinline__ void arrive_cluster_empty_barrier(uint64_t *bar,
-                                                             uint32_t rank_id) {
-  arrive_barrier_remote(bar, rank_id);
-}
 
 template <int CM, int CN>
 __device__ __forceinline__ int cluster_rank_mn(int cm, int cn) {
@@ -186,90 +78,9 @@ __device__ __forceinline__ uint16_t B_mcast_mask(int cn) {
   return mask;
 }
 
-template <int Stages> struct PipelineState {
-  int phase = 0;
-  int stage_idx = 0;
-  __device__ void advance() {
-    stage_idx++;
-    if (stage_idx == Stages) {
-      phase ^= 1;
-      stage_idx = 0;
-    }
-  }
-};
-
-__device__ __forceinline__ void tma_load(half *dst, void const *tensor_map,
-                                         uint64_t *bar, int major_blk,
-                                         int minor_offset) {
-  uint64_t map_ptr = reinterpret_cast<uint64_t>(tensor_map);
-  uint32_t dst_ptr = static_cast<uint32_t>(__cvta_generic_to_shared(dst));
-  uint32_t bar_ptr = static_cast<uint32_t>(__cvta_generic_to_shared(bar));
-  asm volatile("cp.async.bulk.tensor.3d.shared::cluster.global.mbarrier::"
-               "complete_tx::bytes"
-               " [%0], [%1, {%3, %4, %5}], [%2];\n" ::"r"(dst_ptr),
-               "l"(map_ptr), "r"(bar_ptr), "n"(0), "r"(minor_offset),
-               "r"(major_blk)
-               : "memory");
-}
-
-__device__ __forceinline__ void
-tma_multicast_load(half *dst, void const *tensor_map, uint64_t *bar,
-                   uint16_t mask, int major_blk, int minor_offset) {
-  uint64_t map_ptr = reinterpret_cast<uint64_t>(tensor_map);
-  uint32_t dst_ptr = static_cast<uint32_t>(__cvta_generic_to_shared(dst));
-  uint32_t bar_ptr = static_cast<uint32_t>(__cvta_generic_to_shared(bar));
-  asm volatile("cp.async.bulk.tensor.3d.shared::cluster.global.mbarrier::"
-               "complete_tx::bytes.multicast::cluster.L2::cache_hint"
-               " [%0], [%1, {%4, %5, %6}], [%2], %3, %7;\n" ::"r"(dst_ptr),
-               "l"(map_ptr), "r"(bar_ptr), "h"(mask), "n"(0), "r"(minor_offset),
-               "r"(major_blk), "l"(0x14F0000000000000ull)
-               : "memory");
-}
-
-__device__ __forceinline__ void tma_store(void const *tensor_map, half *src,
-                                          int global_row, int global_col) {
-  uint64_t map_ptr = reinterpret_cast<uint64_t>(tensor_map);
-  uint32_t src_ptr = static_cast<uint32_t>(__cvta_generic_to_shared(src));
-  asm volatile("cp.async.bulk.tensor.3d.global.shared::cta.tile.bulk_group"
-               " [%0, {%2, %3, %4}], [%1];\n" ::"l"(map_ptr),
-               "r"(src_ptr), "n"(0), "r"(global_row), "r"(global_col / 64)
-               : "memory");
-}
-
-__device__ __forceinline__ void tma_commit_group() {
-  asm volatile("cp.async.bulk.commit_group;\n" ::: "memory");
-}
-
-template <int PendingGroups> __device__ __forceinline__ void tma_wait_group() {
-  static_assert(PendingGroups >= 0 && PendingGroups <= 7);
-  asm volatile("cp.async.bulk.wait_group.read %0;\n" ::"n"(PendingGroups)
-               : "memory");
-}
-
-__device__ __forceinline__ void fence_async_shared() {
-  asm volatile("fence.proxy.async.shared::cta;\n" ::: "memory");
-}
-
 __device__ __forceinline__ void consumer_warpgroups_sync() {
   asm volatile("bar.sync 1, %0;\n" ::"n"(kCoopConsumers * kWarpGroupSize)
                : "memory");
-}
-
-__device__ __forceinline__ void stmatrix(half *smem_ptr, half src[8]) {
-  uint32_t smem = static_cast<uint32_t>(__cvta_generic_to_shared(smem_ptr));
-  uint32_t const *regs = reinterpret_cast<uint32_t const *>(src);
-  asm volatile("stmatrix.sync.aligned.x4.m8n8.shared.b16 [%0], "
-               "{%1, %2, %3, %4};\n" ::"r"(smem),
-               "r"(regs[0]), "r"(regs[1]), "r"(regs[2]), "r"(regs[3])
-               : "memory");
-}
-
-__device__ __forceinline__ int swizzle_128b_half_offset(uint32_t base_addr,
-                                                        int half_offset) {
-  uint32_t const byte_addr =
-      base_addr + static_cast<uint32_t>(half_offset) * sizeof(half);
-  uint32_t const swizzled_byte_addr = byte_addr ^ ((byte_addr & 0x380u) >> 3);
-  return static_cast<int>((swizzled_byte_addr - base_addr) / sizeof(half));
 }
 
 __device__ __forceinline__ int b_mn_smem_offset(int n_offset, int k_offset,
@@ -336,7 +147,8 @@ store_accumulators_tma(SharedStorageT &smem, void const *tensor_map_c,
 
       int const col = inst_n * 16 + col_lane;
       int const offset = row_in_cta * kCoopTmaStoreTileN + col;
-      stmatrix(&smem_d[swizzle_128b_half_offset(smem_d_addr, offset)], frag);
+      store_matrix_x4_m8n8(
+          &smem_d[swizzled_half_offset_128b(smem_d_addr, offset)], frag);
     }
 
     fence_async_shared();
@@ -379,19 +191,18 @@ __global__ __launch_bounds__(kCoopThreads) void hgemm_cooperative_kernel(
       reinterpret_cast<MainLoopSharedStorage *>(shared_memory);
 
   int const K_TILE_MAX = K / kCoopCtaK;
-  GemmPersistentTileScheduler scheduler(scheduler_params);
-  __shared__ uint64_t full[kCoopStages];
-  __shared__ uint64_t empty[kCoopStages];
+  CooperativeTileScheduler scheduler(scheduler_params);
+  using MainloopPipeline = Pipeline<kCoopStages>;
+  __shared__ MainloopPipeline::SharedStorage pipeline_storage;
+  MainloopPipeline pipeline(
+      pipeline_storage, kCoopClusterM + kCoopClusterN - 1);
 
   if (threadIdx.x == 0) {
-    for (int i = 0; i < kCoopStages; i++) {
-      init_barrier(&full[i], 1);
-      init_barrier(&empty[i],
-                   kCoopConsumers * (kCoopClusterM + kCoopClusterN - 1));
-    }
+    pipeline.initialize(
+        kCoopConsumers * (kCoopClusterM + kCoopClusterN - 1));
   }
   __syncthreads();
-  fence_barrier_init();
+  pipeline.fence_barrier_init();
   cluster_sync();
 
   if (role == WarpGroupRole::Producer) {
@@ -407,19 +218,21 @@ __global__ __launch_bounds__(kCoopThreads) void hgemm_cooperative_kernel(
         for (GemmTile tile = scheduler.current(); tile.valid;
              tile = scheduler.next_producer_tile()) {
           for (int k_tile = 0; k_tile < K_TILE_MAX; k_tile++) {
-            wait_barrier(&empty[smem_pipe_write.stage_idx],
-                         smem_pipe_write.phase);
-            expect_tma_bytes(&full[smem_pipe_write.stage_idx], kExpected_bytes);
+            pipeline.producer_acquire(smem_pipe_write);
+            pipeline.producer_expect_transaction(smem_pipe_write,
+                                                 kExpected_bytes);
+            uint64_t *full_barrier =
+                pipeline.producer_get_barrier(smem_pipe_write);
 
             auto smem_a_rank_offset =
                 cluster_n_rank * (kCoopCtaM / kCoopClusterN) * kCoopCtaK;
             // load A
             tma_multicast_load(
                 &smem->Abuffer[smem_pipe_write.stage_idx].A[smem_a_rank_offset],
-                &tensorMapA, &full[smem_pipe_write.stage_idx], a_multicast_mask,
-                k_tile * (kCoopCtaK / 64),
+                &tensorMapA, full_barrier, a_multicast_mask,
                 tile.m * kCoopCtaM +
-                    cluster_n_rank * (kCoopCtaM / kCoopClusterN));
+                    cluster_n_rank * (kCoopCtaM / kCoopClusterN),
+                k_tile * (kCoopCtaK / 64));
 
             // load B in GMMA MN-major SW128 order: each atom is N64 x K8.
 #pragma unroll
@@ -427,12 +240,12 @@ __global__ __launch_bounds__(kCoopThreads) void hgemm_cooperative_kernel(
               half *smem_b_atom =
                   &smem->Bbuffer[smem_pipe_write.stage_idx]
                        .B[b_mn_smem_offset(0, k_atom, kCoopCtaN)];
-              tma_load(smem_b_atom, &tensorMapB,
-                       &full[smem_pipe_write.stage_idx],
-                       (tile.n * kCoopCtaN) / kCoopTmaBAtomN,
-                       k_tile * kCoopCtaK + k_atom);
+              tma_load(smem_b_atom, &tensorMapB, full_barrier,
+                       k_tile * kCoopCtaK + k_atom,
+                       (tile.n * kCoopCtaN) / kCoopTmaBAtomN);
             }
 
+            pipeline.producer_commit(smem_pipe_write, kExpected_bytes);
             smem_pipe_write.advance();
           }
         }
@@ -445,32 +258,32 @@ __global__ __launch_bounds__(kCoopThreads) void hgemm_cooperative_kernel(
     PipelineState<kCoopStages> smem_pipe_read;
     PipelineState<kCoopStages> smem_pipe_release = smem_pipe_read;
     for (int i = 0; i < kCoopStages; i++) {
-      if (warp_group_thread_idx < (kCoopClusterM + kCoopClusterN - 1)) {
-        arrive_cluster_empty_barrier(&empty[i], warp_group_thread_idx);
-      }
+      pipeline.consumer_release(static_cast<uint32_t>(i),
+                                static_cast<uint32_t>(warp_group_thread_idx));
     }
     for (GemmTile tile = scheduler.initial_consumer_tile(consumer_id);
          tile.valid; tile = scheduler.next_consumer_tile()) {
 
-      wait_barrier(&full[smem_pipe_read.stage_idx], smem_pipe_read.phase);
+      pipeline.consumer_wait(smem_pipe_read);
       wgmma_fence();
-      wgmma256<0, 1, 1, 0, 1>(accumulator,
-                              &smem->Abuffer[smem_pipe_read.stage_idx]
-                                   .A[consumer_id * kCoopConsumerM * kCoopCtaK],
-                              &smem->Bbuffer[smem_pipe_read.stage_idx].B[0]);
-      wgmma256<1, 1, 1, 0, 1>(
+      wgmma_m64n256k16_f32_f16_f16<0, 1, 1, 0, 1>(
+          accumulator,
+          &smem->Abuffer[smem_pipe_read.stage_idx]
+               .A[consumer_id * kCoopConsumerM * kCoopCtaK],
+          &smem->Bbuffer[smem_pipe_read.stage_idx].B[0]);
+      wgmma_m64n256k16_f32_f16_f16<1, 1, 1, 0, 1>(
           accumulator,
           &smem->Abuffer[smem_pipe_read.stage_idx]
                .A[consumer_id * kCoopConsumerM * kCoopCtaK + 1 * kCoopGmmaK],
           &smem->Bbuffer[smem_pipe_read.stage_idx]
                .B[b_mn_smem_offset(0, 1 * kCoopGmmaK, kCoopCtaN)]);
-      wgmma256<1, 1, 1, 0, 1>(
+      wgmma_m64n256k16_f32_f16_f16<1, 1, 1, 0, 1>(
           accumulator,
           &smem->Abuffer[smem_pipe_read.stage_idx]
                .A[consumer_id * kCoopConsumerM * kCoopCtaK + 2 * kCoopGmmaK],
           &smem->Bbuffer[smem_pipe_read.stage_idx]
                .B[b_mn_smem_offset(0, 2 * kCoopGmmaK, kCoopCtaN)]);
-      wgmma256<1, 1, 1, 0, 1>(
+      wgmma_m64n256k16_f32_f16_f16<1, 1, 1, 0, 1>(
           accumulator,
           &smem->Abuffer[smem_pipe_read.stage_idx]
                .A[consumer_id * kCoopConsumerM * kCoopCtaK + 3 * kCoopGmmaK],
@@ -480,26 +293,26 @@ __global__ __launch_bounds__(kCoopThreads) void hgemm_cooperative_kernel(
       smem_pipe_read.advance();
 
       for (int k_tile = 1; k_tile < K_TILE_MAX; k_tile++) {
-        wait_barrier(&full[smem_pipe_read.stage_idx], smem_pipe_read.phase);
+        pipeline.consumer_wait(smem_pipe_read);
         wgmma_fence();
-        wgmma256<1, 1, 1, 0, 1>(
+        wgmma_m64n256k16_f32_f16_f16<1, 1, 1, 0, 1>(
             accumulator,
             &smem->Abuffer[smem_pipe_read.stage_idx]
                  .A[consumer_id * kCoopConsumerM * kCoopCtaK],
             &smem->Bbuffer[smem_pipe_read.stage_idx].B[0]);
-        wgmma256<1, 1, 1, 0, 1>(
+        wgmma_m64n256k16_f32_f16_f16<1, 1, 1, 0, 1>(
             accumulator,
             &smem->Abuffer[smem_pipe_read.stage_idx]
                  .A[consumer_id * kCoopConsumerM * kCoopCtaK + 1 * kCoopGmmaK],
             &smem->Bbuffer[smem_pipe_read.stage_idx]
                  .B[b_mn_smem_offset(0, 1 * kCoopGmmaK, kCoopCtaN)]);
-        wgmma256<1, 1, 1, 0, 1>(
+        wgmma_m64n256k16_f32_f16_f16<1, 1, 1, 0, 1>(
             accumulator,
             &smem->Abuffer[smem_pipe_read.stage_idx]
                  .A[consumer_id * kCoopConsumerM * kCoopCtaK + 2 * kCoopGmmaK],
             &smem->Bbuffer[smem_pipe_read.stage_idx]
                  .B[b_mn_smem_offset(0, 2 * kCoopGmmaK, kCoopCtaN)]);
-        wgmma256<1, 1, 1, 0, 1>(
+        wgmma_m64n256k16_f32_f16_f16<1, 1, 1, 0, 1>(
             accumulator,
             &smem->Abuffer[smem_pipe_read.stage_idx]
                  .A[consumer_id * kCoopConsumerM * kCoopCtaK + 3 * kCoopGmmaK],
@@ -508,19 +321,16 @@ __global__ __launch_bounds__(kCoopThreads) void hgemm_cooperative_kernel(
 
         wgmma_commit_group();
         wgmma_wait_group<1>();
-        if (warp_group_thread_idx < (kCoopClusterM + kCoopClusterN - 1)) {
-          arrive_cluster_empty_barrier(&empty[smem_pipe_release.stage_idx],
-                                       warp_group_thread_idx);
-        }
+        pipeline.consumer_release(
+            smem_pipe_release,
+            static_cast<uint32_t>(warp_group_thread_idx));
         smem_pipe_read.advance();
         smem_pipe_release.advance();
       }
       wgmma_wait_group<0>();
-      if (warp_group_thread_idx < (kCoopClusterM + kCoopClusterN - 1)) {
-        arrive_cluster_empty_barrier(&empty[smem_pipe_release.stage_idx],
-                                     warp_group_thread_idx);
-        smem_pipe_release.advance();
-      }
+      pipeline.consumer_release(
+          smem_pipe_release, static_cast<uint32_t>(warp_group_thread_idx));
+      smem_pipe_release.advance();
       store_accumulators_tma(*smem, &tensorMapC, tile, consumer_id,
                              warp_group_thread_idx, accumulator);
     }

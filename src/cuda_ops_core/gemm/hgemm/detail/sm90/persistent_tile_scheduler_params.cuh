@@ -1,9 +1,15 @@
 #pragma once
 
-#include <cuda_runtime.h>
 #include <cstdint>
 
+#include <cuda_runtime.h>
+
 namespace cuda_ops_core::detail::sm90::scheduler {
+
+enum class RasterOrder { AlongM, AlongN };
+
+enum class RasterOrderOptions { Heuristic, AlongM, AlongN };
+
 namespace impl {
 
 __host__ __device__ constexpr uint32_t ceil_div(uint32_t a, uint32_t b) {
@@ -29,11 +35,94 @@ __host__ __device__ constexpr uint32_t max_u32(uint32_t a, uint32_t b) {
   return a > b ? a : b;
 }
 
+__host__ __device__ constexpr uint32_t
+get_max_cta_occupancy(int max_sm_per_gpc, uint32_t cluster_m,
+                      uint32_t cluster_n, int sm_count) {
+  uint32_t cluster_size = max_u32(cluster_m * cluster_n, 1u);
+  if (sm_count <= 0 || max_sm_per_gpc <= 0) {
+    return 0;
+  }
+
+  int min_num_gpc = sm_count < max_sm_per_gpc ? 1 : sm_count / max_sm_per_gpc;
+  int max_cta_per_gpc =
+      max_sm_per_gpc - (max_sm_per_gpc % static_cast<int>(cluster_size));
+  int cta_per_device = min_num_gpc * max_cta_per_gpc;
+
+  int residual_gpc =
+      sm_count < max_sm_per_gpc ? 0 : sm_count % max_sm_per_gpc;
+  int residual_cta =
+      residual_gpc - (residual_gpc % static_cast<int>(cluster_size));
+  cta_per_device += residual_cta;
+  cta_per_device = sm_count < cta_per_device ? sm_count : cta_per_device;
+
+  return static_cast<uint32_t>(cta_per_device);
+}
+
+template <typename Params>
+__host__ __device__ dim3 get_grid_shape(Params const &params, int sm_count,
+                                        int max_active_clusters = 0,
+                                        bool truncate_by_problem_size = true) {
+  if (params.blocks_per_problem == 0) {
+    return dim3{0, 1, 1};
+  }
+
+  bool along_n = params.raster_order_along_n();
+  uint32_t cluster_m = params.cluster_shape_m_for_grid();
+  uint32_t cluster_n = params.cluster_shape_n_for_grid();
+  uint32_t cluster_size = max_u32(cluster_m * cluster_n, 1u);
+  int problem_blocks_total = static_cast<int>(params.blocks_per_problem);
+
+  dim3 launch_grid = along_n ? dim3(cluster_m, 1, 1) : dim3(1, cluster_n, 1);
+
+  if (cluster_size == 1) {
+    if (along_n) {
+      launch_grid.y = truncate_by_problem_size
+                          ? min_int(sm_count, problem_blocks_total)
+                          : sm_count;
+    } else {
+      launch_grid.x = truncate_by_problem_size
+                          ? min_int(sm_count, problem_blocks_total)
+                          : sm_count;
+    }
+  } else if (max_active_clusters != 0 &&
+             max_active_clusters * static_cast<int>(cluster_size) <=
+                 sm_count) {
+    if (along_n) {
+      int active_ctas = max_active_clusters * static_cast<int>(cluster_n);
+      int problem_ctas = problem_blocks_total / static_cast<int>(cluster_m);
+      launch_grid.y = truncate_by_problem_size
+                          ? min_int(active_ctas, problem_ctas)
+                          : active_ctas;
+    } else {
+      int active_ctas = max_active_clusters * static_cast<int>(cluster_m);
+      int problem_ctas = problem_blocks_total / static_cast<int>(cluster_n);
+      launch_grid.x = truncate_by_problem_size
+                          ? min_int(active_ctas, problem_ctas)
+                          : active_ctas;
+    }
+  } else {
+    constexpr int kMaxSmPerGpcSm90 = 18;
+    uint32_t cta_per_device =
+        get_max_cta_occupancy(kMaxSmPerGpcSm90, cluster_m, cluster_n, sm_count);
+    if (along_n) {
+      int active_ctas = static_cast<int>(cta_per_device / cluster_m);
+      int problem_ctas = problem_blocks_total / static_cast<int>(cluster_m);
+      launch_grid.y = truncate_by_problem_size
+                          ? min_int(active_ctas, problem_ctas)
+                          : active_ctas;
+    } else {
+      int active_ctas = static_cast<int>(cta_per_device / cluster_n);
+      int problem_ctas = problem_blocks_total / static_cast<int>(cluster_n);
+      launch_grid.x = truncate_by_problem_size
+                          ? min_int(active_ctas, problem_ctas)
+                          : active_ctas;
+    }
+  }
+
+  return launch_grid;
+}
+
 } // namespace impl
-
-enum class RasterOrder { AlongM, AlongN };
-
-enum class RasterOrderOptions { Heuristic, AlongM, AlongN };
 
 struct GemmTile {
   int m = -1;
@@ -66,6 +155,14 @@ struct PersistentTileSchedulerSm90Params {
 
   __host__ __device__ bool raster_order_along_n() const {
     return (scheduler_bits & kRasterAlongNBit) != 0;
+  }
+
+  __host__ __device__ uint32_t cluster_shape_m_for_grid() const {
+    return raster_order_along_n() ? cluster_shape_minor : cluster_shape_major;
+  }
+
+  __host__ __device__ uint32_t cluster_shape_n_for_grid() const {
+    return raster_order_along_n() ? cluster_shape_major : cluster_shape_minor;
   }
 
   __host__ __device__ static int32_t
@@ -126,31 +223,15 @@ struct PersistentTileSchedulerSm90Params {
                                                             uint32_t cluster_m,
                                                             uint32_t cluster_n,
                                                             int sm_count) {
-    uint32_t cluster_size = impl::max_u32(cluster_m * cluster_n, 1u);
-    if (sm_count <= 0 || max_sm_per_gpc <= 0) {
-      return 0;
-    }
-
-    int min_num_gpc = sm_count < max_sm_per_gpc ? 1 : sm_count / max_sm_per_gpc;
-    int max_cta_per_gpc =
-        max_sm_per_gpc - (max_sm_per_gpc % static_cast<int>(cluster_size));
-    int cta_per_device = min_num_gpc * max_cta_per_gpc;
-
-    int residual_gpc =
-        sm_count < max_sm_per_gpc ? 0 : sm_count % max_sm_per_gpc;
-    int residual_cta =
-        residual_gpc - (residual_gpc % static_cast<int>(cluster_size));
-    cta_per_device += residual_cta;
-    cta_per_device = sm_count < cta_per_device ? sm_count : cta_per_device;
-
-    return static_cast<uint32_t>(cta_per_device);
+    return impl::get_max_cta_occupancy(max_sm_per_gpc, cluster_m, cluster_n,
+                                       sm_count);
   }
 
   __host__ __device__ void initialize(
       int M, int N, int cta_m, int cta_n, uint32_t cluster_m = 1,
       uint32_t cluster_n = 1, int max_swizzle_size = 1,
       RasterOrderOptions raster_order_option = RasterOrderOptions::Heuristic) {
-    // Precondition: M and N are exact multiples of the CTA shape.
+    // Precondition: M/N are exact multiples of the CTA and cluster shapes.
     uint32_t ctas_m =
         (M > 0 && cta_m > 0) ? static_cast<uint32_t>(M / cta_m) : 0u;
     uint32_t ctas_n =
@@ -188,8 +269,6 @@ struct PersistentTileSchedulerSm90Params {
     uint32_t minor_clusters = raster_order == RasterOrder::AlongN
                                   ? problem_blocks_m / cluster_shape_m
                                   : problem_blocks_n / cluster_shape_n;
-
-    // Avoid CUTLASS-style padded swizzle tiles in this exact-tiling kernel.
     int32_t log_swizzle_size = fit_log_swizzle_size(
         minor_clusters, get_log_swizzle_size(problem_blocks_m, problem_blocks_n,
                                              max_swizzle_size));
@@ -251,123 +330,12 @@ struct PersistentTileSchedulerSm90Params {
   get_grid_shape(PersistentTileSchedulerSm90Params const &params, int sm_count,
                  int max_active_clusters = 0,
                  bool truncate_by_problem_size = true) {
-    if (params.blocks_per_problem == 0) {
-      return dim3{0, 1, 1};
-    }
-
-    bool along_n = params.raster_order_along_n();
-    uint32_t cluster_m =
-        along_n ? params.cluster_shape_minor : params.cluster_shape_major;
-    uint32_t cluster_n =
-        along_n ? params.cluster_shape_major : params.cluster_shape_minor;
-    uint32_t cluster_size = impl::max_u32(cluster_m * cluster_n, 1u);
-    int problem_blocks_total = static_cast<int>(params.blocks_per_problem);
-
-    dim3 launch_grid = along_n ? dim3(cluster_m, 1, 1) : dim3(1, cluster_n, 1);
-
-    if (cluster_size == 1) {
-      if (along_n) {
-        launch_grid.y = truncate_by_problem_size
-                            ? impl::min_int(sm_count, problem_blocks_total)
-                            : sm_count;
-      } else {
-        launch_grid.x = truncate_by_problem_size
-                            ? impl::min_int(sm_count, problem_blocks_total)
-                            : sm_count;
-      }
-    } else if (max_active_clusters != 0 &&
-               max_active_clusters * static_cast<int>(cluster_size) <=
-                   sm_count) {
-      if (along_n) {
-        int active_ctas = max_active_clusters * static_cast<int>(cluster_n);
-        int problem_ctas = problem_blocks_total / static_cast<int>(cluster_m);
-        launch_grid.y = truncate_by_problem_size
-                            ? impl::min_int(active_ctas, problem_ctas)
-                            : active_ctas;
-      } else {
-        int active_ctas = max_active_clusters * static_cast<int>(cluster_m);
-        int problem_ctas = problem_blocks_total / static_cast<int>(cluster_n);
-        launch_grid.x = truncate_by_problem_size
-                            ? impl::min_int(active_ctas, problem_ctas)
-                            : active_ctas;
-      }
-    } else {
-      constexpr int kMaxSmPerGpcSm90 = 18;
-      uint32_t cta_per_device = get_max_cta_occupancy(
-          kMaxSmPerGpcSm90, cluster_m, cluster_n, sm_count);
-      if (along_n) {
-        int active_ctas = static_cast<int>(cta_per_device / cluster_m);
-        int problem_ctas = problem_blocks_total / static_cast<int>(cluster_m);
-        launch_grid.y = truncate_by_problem_size
-                            ? impl::min_int(active_ctas, problem_ctas)
-                            : active_ctas;
-      } else {
-        int active_ctas = static_cast<int>(cta_per_device / cluster_n);
-        int problem_ctas = problem_blocks_total / static_cast<int>(cluster_n);
-        launch_grid.x = truncate_by_problem_size
-                            ? impl::min_int(active_ctas, problem_ctas)
-                            : active_ctas;
-      }
-    }
-
-    return launch_grid;
+    return impl::get_grid_shape(params, sm_count, max_active_clusters,
+                                truncate_by_problem_size);
   }
 };
 
 static_assert(sizeof(PersistentTileSchedulerSm90Params) == 24,
               "Keep SM90 persistent scheduler params compact.");
-
-class GemmPersistentTileScheduler {
-public:
-  __device__ explicit GemmPersistentTileScheduler(
-      PersistentTileSchedulerSm90Params const &params)
-      : params_(params) {
-    bool along_n = params_.raster_order_along_n();
-    uint64_t block_minor =
-        along_n ? uint64_t{blockIdx.x} : uint64_t{blockIdx.y};
-    uint64_t block_major =
-        along_n ? uint64_t{blockIdx.y} : uint64_t{blockIdx.x};
-    uint64_t grid_minor = along_n ? uint64_t{gridDim.x} : uint64_t{gridDim.y};
-    current_work_linear_idx_ = block_minor + block_major * grid_minor;
-    total_grid_size_ =
-        uint64_t{gridDim.x} * uint64_t{gridDim.y} * uint64_t{gridDim.z};
-  }
-
-  __device__ GemmTile current() const {
-    return params_.tile_for_linear_idx(current_work_linear_idx_);
-  }
-
-  __device__ GemmTile initial_consumer_tile(uint32_t consumer_warp_group_idx) {
-    (void)consumer_warp_group_idx;
-    return current();
-  }
-
-  __device__ void advance_to_next_work(uint32_t advance_count = 1) {
-    current_work_linear_idx_ += total_grid_size_ * uint64_t{advance_count};
-  }
-
-  __device__ GemmTile next(uint32_t advance_count = 1) {
-    advance_to_next_work(advance_count);
-    return current();
-  }
-
-  __device__ GemmTile next_producer_tile() { return next(); }
-
-  __device__ GemmTile next_consumer_tile() { return next(); }
-
-  __device__ bool is_last_tile(uint32_t advance_count = 1) const {
-    return !params_
-                .tile_for_linear_idx(current_work_linear_idx_ +
-                                     total_grid_size_ * uint64_t{advance_count})
-                .valid;
-  }
-
-  __device__ bool is_last_consumer_tile() const { return is_last_tile(); }
-
-private:
-  PersistentTileSchedulerSm90Params params_{};
-  uint64_t current_work_linear_idx_ = 0;
-  uint64_t total_grid_size_ = 1;
-};
 
 } // namespace cuda_ops_core::detail::sm90::scheduler
