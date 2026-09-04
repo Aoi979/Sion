@@ -14,11 +14,20 @@ mcError_t xcore1000_hgemm_f16_nt_m256n256k64_fp32acc_launch(const void *A,
     return mcErrorInvalidValue;
   }
 
-  // The kernel maps blockIdx.x to the M tile and blockIdx.y to the N tile.
-  dim3 grid(static_cast<unsigned>(M / 256), static_cast<unsigned>(N / 256), 1);
+  // Keep the validated production configuration in one place: the kernel
+  // uses the project's CTA swizzle=8 and staggerU=64 workaround.
+  constexpr int kCtaSwizzle = 8;
+  constexpr int kStaggerU = 64;
+  unsigned const tile_m_count = static_cast<unsigned>(M / 256);
+  unsigned const tile_n_count = static_cast<unsigned>(N / 256);
+  unsigned const grid_x = tile_m_count * kCtaSwizzle;
+  unsigned const grid_y =
+      (tile_n_count + kCtaSwizzle - 1) / kCtaSwizzle;
+  dim3 grid(grid_x, grid_y, 1);
   dim3 block(512, 1, 1);
 
-  hgemm_tn_256x256x64_4stage_fp16<<<grid, block, 0, stream>>>(A, B, C, M, N, K);
+  hgemm_tn_256x256x64_4stage_fp16<kCtaSwizzle>
+      <<<grid, block, 0, stream>>>(A, B, C, M, N, K, kStaggerU);
   return mcGetLastError();
 }
 

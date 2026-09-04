@@ -4,18 +4,6 @@
 
 #include <stdint.h>
 
-/*
- * Production choice: CTA swizzle=8 with staggerU=64.
- *
- * This is a curve-fitting workaround rather than an elegant hardware-aware
- * solution. The C500's DPC/AP organization is not sufficiently documented
- * or understood, and the attempted DPC-aware mappings did not provide a
- * reliable improvement in L2C hit rate. We therefore use staggerU to
- * desynchronize the CTAs' K-tile requests and improve effective HBM bandwidth
- * utilization / memory-latency hiding. This does not increase peak HBM
- * bandwidth and should be revisited once the DPC memory topology is understood.
- */
-
 __device__ __forceinline__ uint16_t
 xcore1000_hgemm_fp32_to_fp16_bits(float value) {
   __half converted = __float2half(value);
@@ -61,10 +49,8 @@ __device__ __forceinline__ int xcore1000_hgemm_swizzled_k(int logical_row,
         *lds_b_addr[(STAGE)][(N_IN_STAGE)][(K_GROUP)];                         \
   } while (0)
 
-template <int CtaSwizzle>
 __global__ void hgemm_tn_256x256x64_4stage_fp16(const void *A, const void *B,
-                                                void *C, int M, int N, int K,
-                                                int stagger_u) {
+                                                void *C, int M, int N, int K) {
   constexpr int kCtaM = 256;
   constexpr int kCtaN = 256;
   constexpr int kCtaK = 64;
@@ -95,10 +81,8 @@ __global__ void hgemm_tn_256x256x64_4stage_fp16(const void *A, const void *B,
   int const wave_id = tid / kWaveSize;
   int const wave_id_m = wave_id % kWaveNumsM;
   int const wave_id_n = wave_id / kWaveNumsM;
-  // Row-major CTA swizzle, matching the project's SM80 HGEMM schedulers:
-  // grid.x = tile_m_count * CtaSwizzle and grid.y = ceil(tile_n_count / CtaSwizzle).
-  int const tile_m = blockIdx.x / CtaSwizzle;
-  int const tile_n = blockIdx.y * CtaSwizzle + blockIdx.x % CtaSwizzle;
+  int const tile_m = blockIdx.x;
+  int const tile_n = blockIdx.y;
 
   if ((tile_m + 1) * kCtaM > M || (tile_n + 1) * kCtaN > N || K < kCtaK ||
       K % kCtaK != 0) {
@@ -151,20 +135,6 @@ __global__ void hgemm_tn_256x256x64_4stage_fp16(const void *A, const void *B,
   int const lds_b_k0_base_offset = lds_n0_base * kCtaK + lds_smem_k0;
   int const lds_b_k1_base_offset = lds_n0_base * kCtaK + lds_smem_k1;
 
-
-  int const k_tile_num = K / kCtaK;
-  // Tensile's StaggerU convention: one click is StaggerUStride bytes in U.
-  // Use the documented 256-byte click, i.e. two FP16 K tiles here.
-  constexpr int kStaggerUStrideBytes = 256;
-  constexpr int kStaggerKTile =
-      kStaggerUStrideBytes / (kCtaK * static_cast<int>(sizeof(half)));
-  int stagger_k_tile = 0;
-  if (stagger_u > 0) {
-    // Mapping 0: use the fastest-changing launch coordinate (wg0).
-    stagger_k_tile =
-        ((blockIdx.x % stagger_u) * kStaggerKTile) % k_tile_num;
-  }
-  int const stagger_k_offset = stagger_k_tile * kCtaK;
 
   half *const ldg_sA_addr[kStage] = {
       sA + ldg_sA_base_offset,
@@ -240,14 +210,14 @@ __global__ void hgemm_tn_256x256x64_4stage_fp16(const void *A, const void *B,
                                   7 * kMmaAtomN * kCtaK)}},
   };
 
-  XCORE1000_HGEMM_LDG_A(stagger_k_offset, 0);
-  XCORE1000_HGEMM_LDG_B(stagger_k_offset, 0);
-  XCORE1000_HGEMM_LDG_A(stagger_k_offset, 1);
-  XCORE1000_HGEMM_LDG_B(stagger_k_offset, 1);
-  XCORE1000_HGEMM_LDG_A(stagger_k_offset, 2);
-  XCORE1000_HGEMM_LDG_B(stagger_k_offset, 2);
-  XCORE1000_HGEMM_LDG_A(stagger_k_offset, 3);
-  XCORE1000_HGEMM_LDG_B(stagger_k_offset, 3);
+  XCORE1000_HGEMM_LDG_A(0, 0);
+  XCORE1000_HGEMM_LDG_B(0, 0);
+  XCORE1000_HGEMM_LDG_A(0, 1);
+  XCORE1000_HGEMM_LDG_B(0, 1);
+  XCORE1000_HGEMM_LDG_A(0, 2);
+  XCORE1000_HGEMM_LDG_B(0, 2);
+  XCORE1000_HGEMM_LDG_A(0, 3);
+  XCORE1000_HGEMM_LDG_B(0, 3);
 
   mxc::arrive_gvmcnt<6>();
   mxc::barrier_inst();
@@ -267,13 +237,14 @@ __global__ void hgemm_tn_256x256x64_4stage_fp16(const void *A, const void *B,
   XCORE1000_HGEMM_LDS_B_FRAGMENT(1, 1, 0);
   XCORE1000_HGEMM_LDS_B_FRAGMENT(1, 1, 1);
 
+  int const k_tile_num = K / kCtaK;
+
   // Stable-state invariant at loop entry:
   //   - current stage0/1 are in registers;
   //   - current stage2/3 are the four outstanding gmem->smem requests.
-  int next_k_tile = (stagger_k_tile + 1) % k_tile_num;
+  int next_k_offset = kCtaK;
   for (int k_tiles_left = k_tile_num - 1; k_tiles_left > 0;
-       --k_tiles_left) {
-    int const next_k_offset = next_k_tile * kCtaK;
+       --k_tiles_left, next_k_offset += kCtaK) {
 
     XCORE1000_HGEMM_MMA(0, 0, 0, 0);
     XCORE1000_HGEMM_LDG_A(next_k_offset, 0);
@@ -453,8 +424,6 @@ __global__ void hgemm_tn_256x256x64_4stage_fp16(const void *A, const void *B,
     XCORE1000_HGEMM_MMA(3, 7, 0, 1);
     XCORE1000_HGEMM_MMA(3, 7, 1, 0);
     XCORE1000_HGEMM_MMA(3, 7, 1, 1);
-
-    next_k_tile = (next_k_tile + 1) % k_tile_num;
   }
 
   // Drain
