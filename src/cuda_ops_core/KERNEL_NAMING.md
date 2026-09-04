@@ -10,6 +10,7 @@ Examples:
 
 ```text
 sm80_sgemm_f32_nn_m128n128k8_stage5
+sm80_GA10x_sgemm_f32_nn_m128n128k8_stage5
 sm80_hgemm_f16_nn_m128n128k64_fp32acc
 sm90_hgemm_f16_nn_m128n128k64_pingpong
 sm80_flash_attn_f16_hd64_bq128_bk128_mma16816_v2
@@ -46,3 +47,8 @@ Rules:
   `detail/` should not register kernels.
 - Top-level `__global__` kernel symbols should end in `_kernel` and use the same
   stem as their `.cuh` file.
+- The `smXX` prefix is a physical compute-capability specialization, not a
+  generic performance label. In particular, `sm80_GA10x` denotes the physical
+  4060-class path tuned for runtime CC 8.9; it must remain separate from the
+  plain `sm80` A100-class path because their FP32 throughput balance is
+  different.

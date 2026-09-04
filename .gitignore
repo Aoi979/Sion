@@ -32,6 +32,8 @@ __pycache__/
 /benchmarks/reports/
 /benchmarks/standalone/
 /profiles/
+/.codex_remote_work/
+/ncu_stage5_20260904/
 
 # External kernel drop-in directories copied into src/cuda_ops_core.
 /my_kernel_sm80/

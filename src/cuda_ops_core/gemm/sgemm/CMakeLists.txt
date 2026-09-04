@@ -7,6 +7,7 @@ target_sources(cuda_ops_core PRIVATE
     launchers/sm80_sgemm_f32_nn_m128n128k8_cute_warp_tiling_db.cu
     launchers/sm80_sgemm_f32_nn_m128n128k16_a1b0.cu
     launchers/sm80_sgemm_f32_nn_m128n128k8_stage5.cu
+    launchers/sm80_GA10x_sgemm_f32_nn_m128n128k8_stage5.cu
     launchers/sm80_sgemm_f32_nn_m128n128k8_stage5_one_cta_per_sm.cu
     launchers/sm80_sgemm_f32_nn_m128n128k8_stage5_cutlass_warp_order.cu
     launchers/sm80_sgemm_f32_nn_m128n128k8_stage5_cutlass_schedule.cu

@@ -1,0 +1,33 @@
+#include "../detail/sm80_GA10x_sgemm_f32_nn_m128n128k8_stage5_launcher.cuh"
+
+namespace cuda_ops_core {
+
+Status sm80_GA10x_sgemm_f32_nn_m128n128k8_stage5_launch(
+    uint32_t M, uint32_t N, uint32_t K, float alpha, float const *A,
+    float const *B, float beta, float *C, cudaStream_t stream) {
+  auto status = detail::validate_sm80_GA10x_sgemm_f32_nn_m128n128k8_stage5(
+      M, N, K, alpha, beta, A, B, C);
+  if (!status.ok()) {
+    return status;
+  }
+  detail::sm80::ga10x::launch(
+      const_cast<float *>(A), const_cast<float *>(B), C, static_cast<int>(M),
+      static_cast<int>(N), static_cast<int>(K), stream);
+  return detail::check_sm80_GA10x_sgemm_f32_nn_m128n128k8_stage5(cudaSuccess);
+}
+
+} // namespace cuda_ops_core
+
+REGISTER_KERNEL(
+    sm80_GA10x_sgemm_f32_nn_m128n128k8_stage5,
+    cuda_ops_core::make_sgemm_kernel(
+        "sm80_GA10x_sgemm_f32_nn_m128n128k8_stage5",
+        cuda_ops_core::sm80_GA10x_sgemm_f32_nn_m128n128k8_stage5_launch, true,
+        {.min_cc = 89,
+         .max_cc = 89,
+         .priority = 110,
+         .required_dynamic_smem_bytes =
+             cuda_ops_core::detail::sm80::ga10x::kSharedStorageBytes,
+         .required_threads_per_block =
+             cuda_ops_core::detail::sm80::ga10x::kThreads},
+        cuda_ops_core::detail::sm80_GA10x_sgemm_f32_nn_m128n128k8_stage5_metadata()));
